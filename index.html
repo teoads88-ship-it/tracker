@@ -1079,7 +1079,7 @@ const FOOD_DB = [
   {keys:['мандарина','tangerine','мандарини'],  name:'Мандарина',     kcal:40,  protein:1,  carbs:10, fat:0,  sugar:8,  unit:'бр', per:1},
   {keys:['круша','pear','круши'],               name:'Круша',         kcal:57,  protein:0,  carbs:15, fat:0,  sugar:10, unit:'бр', per:1},
   {keys:['киви','kiwi'],                        name:'Киви',          kcal:42,  protein:1,  carbs:10, fat:0,  sugar:6,  unit:'бр', per:1},
-  // PER 100g ITEMS
+  {keys:['фурма','фурми','date','dates'],        name:'Фурма',         kcal:20,  protein:0,  carbs:5,  fat:0,  sugar:4,  unit:'бр', per:1},
   {keys:['пилe','пилешко','chicken','chicken breast','пилешки гърди'], name:'Пилешко гърди', kcal:165, protein:31, carbs:0,  fat:4,  sugar:0,  unit:'g'},
   {keys:['говеждо','beef','телешко'],           name:'Говеждо',       kcal:250, protein:26, carbs:0,  fat:17, sugar:0,  unit:'g'},
   {keys:['свинско','pork'],                     name:'Свинско',       kcal:297, protein:25, carbs:0,  fat:21, sugar:0,  unit:'g'},
@@ -1205,28 +1205,35 @@ async function estimateAndAdd() {
 
 function showManualEntry(foodName) {
   const statusEl=document.getElementById('macroAiStatus');
+  const safe=foodName.replace(/'/g,"\\'").replace(/"/g,'&quot;');
   statusEl.innerHTML=`<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;align-items:center">
     <span style="font-size:11px;color:var(--muted);flex-shrink:0">${foodName}:</span>
     <input id="manualKcal" type="number" placeholder="kcal" style="width:60px;background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:var(--text);font-size:12px;outline:none"/>
     <input id="manualP" type="number" placeholder="P g" style="width:48px;background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:#7dd3fc;font-size:12px;outline:none"/>
     <input id="manualC" type="number" placeholder="C g" style="width:48px;background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:#fbbf24;font-size:12px;outline:none"/>
     <input id="manualF" type="number" placeholder="F g" style="width:48px;background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:#fb923c;font-size:12px;outline:none"/>
-    <button onclick="submitManual('${foodName.replace(/'/g,"\\'")}'')" style="background:var(--green);border:none;border-radius:6px;padding:4px 10px;color:#000;font-weight:700;font-size:12px;cursor:pointer">+</button>
+    <button onclick="submitManual('${safe}')" style="background:var(--green);border:none;border-radius:6px;padding:4px 10px;color:#000;font-weight:700;font-size:12px;cursor:pointer">+</button>
   </div>`;
 }
 
 function submitManual(foodName) {
-  const kcal=parseInt(document.getElementById('manualKcal')?.value)||0;
-  if(!kcal){ document.getElementById('manualKcal').style.borderColor='#ef4444'; return; }
+  const kcalEl=document.getElementById('manualKcal');
+  const kcal=parseInt(kcalEl?.value)||0;
+  if(!kcal){ if(kcalEl) kcalEl.style.borderColor='#ef4444'; return; }
   const p=parseInt(document.getElementById('manualP')?.value)||0;
   const c=parseInt(document.getElementById('manualC')?.value)||0;
   const f=parseInt(document.getElementById('manualF')?.value)||0;
   addMacroEntry(foodName, kcal, p, c, f, 0);
-  document.getElementById('macroFoodInput').value='';
+  // Clear input and hide manual fields
+  const foodInput=document.getElementById('macroFoodInput');
+  if(foodInput) foodInput.value='';
   const statusEl=document.getElementById('macroAiStatus');
-  statusEl.innerHTML=''; statusEl.textContent=`✓ ${kcal} kcal додадено`;
-  statusEl.style.color='#4ade80';
-  setTimeout(()=>{ if(statusEl) statusEl.textContent=''; },2000);
+  if(statusEl){
+    statusEl.innerHTML='';
+    statusEl.textContent=`✓ ${kcal} kcal добавено`;
+    statusEl.style.color='#4ade80';
+    setTimeout(()=>{ if(statusEl) statusEl.textContent=''; },2000);
+  }
 }
 
 function addMacroEntry(food, kcal, protein=0, carbs=0, fat=0, sugar=0) {
