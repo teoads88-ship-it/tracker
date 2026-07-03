@@ -186,6 +186,19 @@
 </head>
 <body>
 <div class="app">
+  <!-- LOADING OVERLAY -->
+  <div id="loadingOverlay" style="position:fixed;inset:0;background:#0a0e1a;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+    <div style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;letter-spacing:6px;color:#fff">TRACK</div>
+    <div style="display:flex;gap:6px">
+      <div style="width:8px;height:8px;border-radius:50%;background:#4ade80;animation:dotPulse 1.2s ease-in-out infinite"></div>
+      <div style="width:8px;height:8px;border-radius:50%;background:#4ade80;animation:dotPulse 1.2s ease-in-out .2s infinite"></div>
+      <div style="width:8px;height:8px;border-radius:50%;background:#4ade80;animation:dotPulse 1.2s ease-in-out .4s infinite"></div>
+    </div>
+    <div style="font-size:11px;color:#64748b;letter-spacing:2px">СВЪРЗВАНЕ...</div>
+  </div>
+  <style>
+    @keyframes dotPulse { 0%,80%,100%{transform:scale(0.6);opacity:0.4} 40%{transform:scale(1);opacity:1} }
+  </style>
   <!-- HEADER -->
   <div class="header">
     <div class="streak-info">
@@ -426,6 +439,35 @@
   </div>
 </div>
 
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDuXDFnEWeueNsTLlNnaTIwhAi3TIgt1Wc",
+  authDomain: "trkc-8b1ce.firebaseapp.com",
+  databaseURL: "https://trkc-8b1ce-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "trkc-8b1ce",
+  storageBucket: "trkc-8b1ce.firebasestorage.app",
+  messagingSenderId: "167709297952",
+  appId: "1:167709297952:web:bac600fc6ba7e5e9c8db45"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const DATA_REF = 'tracker/main';
+
+// Expose to global scope for main script
+window._fbDb = db;
+window._fbRef = ref;
+window._fbSet = set;
+window._fbOnValue = onValue;
+window._fbDataRef = DATA_REF;
+window._fbReady = true;
+window.dispatchEvent(new Event('firebase-ready'));
+</script>
+
 <script>
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Нд'];
@@ -440,10 +482,29 @@ const SECTION_DEFS = [
   { id:'gym2',     label:'💪 Gym Today 2',          canToggle:true },
 ];
 
-function getTodayKey() { return new Date().toISOString().slice(0,10); }
+function getTodayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function getDayOfWeek() { const d=new Date().getDay(); return d===0?6:d-1; }
+
+// ─── FIREBASE SYNC ────────────────────────────────────────────────────────────
+let _savePending = false;
 function loadData() { try { return JSON.parse(localStorage.getItem('trackData'))||{}; } catch(e){return{};} }
-function saveData(d) { localStorage.setItem('trackData', JSON.stringify(d)); }
+function saveData(d) {
+  localStorage.setItem('trackData', JSON.stringify(d));
+  // Debounced Firebase write
+  if(!_savePending){
+    _savePending=true;
+    setTimeout(()=>{
+      _savePending=false;
+      if(window._fbDb){
+        const r=window._fbRef(window._fbDb, window._fbDataRef);
+        window._fbSet(r, d).catch(e=>console.warn('Firebase write error:',e));
+      }
+    }, 800);
+  }
+}
 
 let data = loadData();
 
@@ -475,7 +536,12 @@ initDefaults();
 
 let todayKey = getTodayKey();
 function getToday() {
-  if (!data.days[todayKey]) data.days[todayKey] = { financeDone:[], finance2Done:[], gymDone:[], gym2Done:[], morningDone:[], eveningDone:[], macros:[], pct:0 };
+  if (!data.days[todayKey]) {
+    data.days[todayKey] = {
+      financeDone:[], finance2Done:[], gymDone:[], gym2Done:[],
+      morningDone:[], eveningDone:[], macros:[], pct:0
+    };
+  }
   return data.days[todayKey];
 }
 
@@ -1002,31 +1068,165 @@ function renderMacroBreakdown() {
     </div>`).join('')||'<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">Нищо добавено още</div>';
 }
 
+// ─── OFFLINE FOOD DATABASE ────────────────────────────────────────────────────
+// Per 100g unless noted. Pinned = single-unit items (яйце, банан etc.)
+const FOOD_DB = [
+  // PINNED SINGLE-UNIT ITEMS (qty = per piece)
+  {keys:['яйце','яйца','egg','eggs'],          name:'Яйце (голямо)', kcal:78,  protein:6,  carbs:0,  fat:5,  sugar:0,  unit:'бр', per:1},
+  {keys:['банан','banana','бананa','банани'],   name:'Банан',         kcal:89,  protein:1,  carbs:23, fat:0,  sugar:12, unit:'бр', per:1},
+  {keys:['ябълка','apple','ябълки'],            name:'Ябълка',        kcal:72,  protein:0,  carbs:19, fat:0,  sugar:14, unit:'бр', per:1},
+  {keys:['портокал','orange','портокали'],      name:'Портокал',      kcal:62,  protein:1,  carbs:15, fat:0,  sugar:12, unit:'бр', per:1},
+  {keys:['мандарина','tangerine','мандарини'],  name:'Мандарина',     kcal:40,  protein:1,  carbs:10, fat:0,  sugar:8,  unit:'бр', per:1},
+  {keys:['круша','pear','круши'],               name:'Круша',         kcal:57,  protein:0,  carbs:15, fat:0,  sugar:10, unit:'бр', per:1},
+  {keys:['киви','kiwi'],                        name:'Киви',          kcal:42,  protein:1,  carbs:10, fat:0,  sugar:6,  unit:'бр', per:1},
+  // PER 100g ITEMS
+  {keys:['пилe','пилешко','chicken','chicken breast','пилешки гърди'], name:'Пилешко гърди', kcal:165, protein:31, carbs:0,  fat:4,  sugar:0,  unit:'g'},
+  {keys:['говеждо','beef','телешко'],           name:'Говеждо',       kcal:250, protein:26, carbs:0,  fat:17, sugar:0,  unit:'g'},
+  {keys:['свинско','pork'],                     name:'Свинско',       kcal:297, protein:25, carbs:0,  fat:21, sugar:0,  unit:'g'},
+  {keys:['сьомга','salmon','риба сьомга'],      name:'Сьомга',        kcal:208, protein:20, carbs:0,  fat:13, sugar:0,  unit:'g'},
+  {keys:['риба тон','tuna','туна'],             name:'Риба тон',      kcal:116, protein:26, carbs:0,  fat:1,  sugar:0,  unit:'g'},
+  {keys:['скумрия','mackerel'],                 name:'Скумрия',       kcal:205, protein:19, carbs:0,  fat:14, sugar:0,  unit:'g'},
+  {keys:['ориз','rice','бял ориз'],             name:'Ориз (варен)',  kcal:130, protein:3,  carbs:28, fat:0,  sugar:0,  unit:'g'},
+  {keys:['кафяв ориз','brown rice'],            name:'Кафяв ориз',    kcal:112, protein:2,  carbs:24, fat:1,  sugar:0,  unit:'g'},
+  {keys:['овесени','oats','овесена каша','oatmeal'], name:'Овесена каша', kcal:68, protein:2, carbs:12, fat:1, sugar:0, unit:'g'},
+  {keys:['паста','pasta','макарони','спагети'], name:'Паста (варена)',kcal:131, protein:5,  carbs:25, fat:1,  sugar:0,  unit:'g'},
+  {keys:['хляб','bread','бял хляб'],           name:'Хляб',          kcal:265, protein:9,  carbs:49, fat:3,  sugar:5,  unit:'g'},
+  {keys:['пълнозърнест хляб','whole wheat bread'], name:'Пълнозърнест хляб', kcal:247, protein:13, carbs:41, fat:4, sugar:6, unit:'g'},
+  {keys:['картофи','potato','картоф'],          name:'Картофи (варени)', kcal:77, protein:2, carbs:17, fat:0, sugar:1, unit:'g'},
+  {keys:['сладки картофи','sweet potato'],      name:'Сладки картофи',kcal:86,  protein:2,  carbs:20, fat:0,  sugar:4,  unit:'g'},
+  {keys:['кисело мляко','yogurt','йогурт'],     name:'Кисело мляко',  kcal:59,  protein:10, carbs:4,  fat:0,  sugar:4,  unit:'g'},
+  {keys:['извара','cottage cheese','cotage'],   name:'Извара',        kcal:98,  protein:11, carbs:3,  fat:4,  sugar:3,  unit:'g'},
+  {keys:['сирене','cheese','кашкавал'],         name:'Сирене',        kcal:402, protein:25, carbs:1,  fat:33, sugar:0,  unit:'g'},
+  {keys:['мляко','milk'],                       name:'Мляко',         kcal:42,  protein:3,  carbs:5,  fat:1,  sugar:5,  unit:'g'},
+  {keys:['масло','butter'],                     name:'Масло',         kcal:717, protein:1,  carbs:0,  fat:81, sugar:0,  unit:'g'},
+  {keys:['зехтин','olive oil','олио'],          name:'Зехтин',        kcal:884, protein:0,  carbs:0,  fat:100,sugar:0,  unit:'g'},
+  {keys:['ядки','nuts','бадеми','almonds'],     name:'Бадеми',        kcal:579, protein:21, carbs:22, fat:50, sugar:4,  unit:'g'},
+  {keys:['фъстъчено масло','peanut butter'],    name:'Фъстъчено масло',kcal:588,protein:25, carbs:20, fat:50, sugar:9,  unit:'g'},
+  {keys:['авокадо','avocado'],                  name:'Авокадо',       kcal:160, protein:2,  carbs:9,  fat:15, sugar:1,  unit:'g'},
+  {keys:['броколи','broccoli'],                 name:'Броколи',       kcal:34,  protein:3,  carbs:7,  fat:0,  sugar:1,  unit:'g'},
+  {keys:['спанак','spinach'],                   name:'Спанак',        kcal:23,  protein:3,  carbs:4,  fat:0,  sugar:0,  unit:'g'},
+  {keys:['домат','tomato','домати'],            name:'Домат',         kcal:18,  protein:1,  carbs:4,  fat:0,  sugar:2,  unit:'g'},
+  {keys:['краставица','cucumber'],              name:'Краставица',    kcal:16,  protein:1,  carbs:4,  fat:0,  sugar:2,  unit:'g'},
+  {keys:['морков','carrot','моркови'],          name:'Морков',        kcal:41,  protein:1,  carbs:10, fat:0,  sugar:5,  unit:'g'},
+  {keys:['протеин','whey','protein powder','протеинов шейк'], name:'Протеин прах', kcal:120, protein:24, carbs:3, fat:2, sugar:1, unit:'g'},
+];
+
+// Bulgarian number words
+const BG_NUMBERS = {'едно':1,'един':1,'една':1,'две':2,'два':2,'три':3,'четири':4,'пет':5,'шест':6,'седем':7,'осем':8,'девет':9,'десет':10};
+
+function parseFood(text) {
+  const t = text.toLowerCase().trim();
+
+  // Extract quantity — digits or BG words
+  let qty = 1, cleanText = t;
+  const numMatch = t.match(/^(\d+(?:[.,]\d+)?)\s*/);
+  if(numMatch){ qty=parseFloat(numMatch[1].replace(',','.')); cleanText=t.slice(numMatch[0].length); }
+  else {
+    for(const [word, val] of Object.entries(BG_NUMBERS)){
+      if(t.startsWith(word+' ')){ qty=val; cleanText=t.slice(word.length+1); break; }
+    }
+  }
+
+  // Extract weight in grams — "180g" or "180 g" or "180гр"
+  let grams = null;
+  const gramMatch = cleanText.match(/(\d+(?:[.,]\d+)?)\s*(?:g|гр|грама|gram)/i);
+  if(gramMatch){ grams=parseFloat(gramMatch[1].replace(',','.')); cleanText=cleanText.replace(gramMatch[0],'').trim(); }
+
+  // Find best matching food
+  let best = null, bestScore = 0;
+  for(const food of FOOD_DB){
+    for(const key of food.keys){
+      if(cleanText.includes(key) || key.includes(cleanText)){
+        const score = key.length;
+        if(score>bestScore){ bestScore=score; best=food; }
+      }
+    }
+  }
+
+  if(!best) return null;
+
+  let multiplier;
+  if(best.unit==='бр'){
+    // Single-unit item: qty = number of pieces
+    multiplier = qty;
+    const totalKcal = Math.round(best.kcal * multiplier);
+    return {
+      name: qty===1 ? best.name : `${qty}x ${best.name}`,
+      kcal: totalKcal,
+      protein: Math.round(best.protein * multiplier),
+      carbs: Math.round(best.carbs * multiplier),
+      fat: Math.round(best.fat * multiplier),
+      sugar: Math.round(best.sugar * multiplier)
+    };
+  } else {
+    // Weight-based: use provided grams or assume 100g
+    const g = grams || (qty > 1 ? qty * 100 : 100);
+    const factor = g / 100;
+    return {
+      name: `${best.name} ${g}g`,
+      kcal: Math.round(best.kcal * factor),
+      protein: Math.round(best.protein * factor),
+      carbs: Math.round(best.carbs * factor),
+      fat: Math.round(best.fat * factor),
+      sugar: Math.round(best.sugar * factor)
+    };
+  }
+}
+
 async function estimateAndAdd() {
   const input=document.getElementById('macroFoodInput');
   const statusEl=document.getElementById('macroAiStatus');
   const btn=document.getElementById('macroAddBtn');
   const text=input.value.trim();
   if(!text) return;
+
   btn.textContent='⏳'; btn.disabled=true;
-  statusEl.textContent='🤖 Изчислявам...'; statusEl.style.color='var(--muted)';
-  try {
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,messages:[{role:'user',content:`Estimate nutrition for: "${text}". Reply ONLY with JSON: {"kcal":250,"name":"Chicken breast 180g","protein":42,"carbs":0,"fat":5,"sugar":0}. Use realistic average values per 100g databases. No text outside JSON.`}]})
-    });
-    const d2=await resp.json();
-    const raw=d2.content?.[0]?.text?.trim()||'';
-    const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
-    addMacroEntry(parsed.name||text, Math.round(parsed.kcal), parsed.protein||0, parsed.carbs||0, parsed.fat||0, parsed.sugar||0);
-    statusEl.textContent=`✓ ~${Math.round(parsed.kcal)} kcal | P:${parsed.protein||0}g C:${parsed.carbs||0}g F:${parsed.fat||0}g`;
+  statusEl.textContent=''; statusEl.style.color='var(--muted)';
+
+  // 1. Try offline DB first
+  const offline = parseFood(text);
+  if(offline){
+    addMacroEntry(offline.name, offline.kcal, offline.protein, offline.carbs, offline.fat, offline.sugar);
+    statusEl.textContent=`✓ ${offline.kcal} kcal | P:${offline.protein}g C:${offline.carbs}g F:${offline.fat}g`;
     statusEl.style.color='#4ade80';
     input.value='';
+    btn.textContent='+'; btn.disabled=false;
     setTimeout(()=>statusEl.textContent='',3000);
-  } catch(e) {
-    statusEl.textContent='⚠ Грешка — опитай пак'; statusEl.style.color='#ef4444';
+    return;
   }
+
+  // 2. Offline not found — show manual fallback immediately, no API call
+  statusEl.textContent='⚠ Не намерих в базата — въведи kcal ръчно';
+  statusEl.style.color='#f97316';
+  // Show inline manual entry
+  showManualEntry(text);
   btn.textContent='+'; btn.disabled=false;
+}
+
+function showManualEntry(foodName) {
+  const statusEl=document.getElementById('macroAiStatus');
+  statusEl.innerHTML=`<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;align-items:center">
+    <span style="font-size:11px;color:var(--muted);flex-shrink:0">${foodName}:</span>
+    <input id="manualKcal" type="number" placeholder="kcal" style="width:60px;background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:var(--text);font-size:12px;outline:none"/>
+    <input id="manualP" type="number" placeholder="P g" style="width:48px;background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:#7dd3fc;font-size:12px;outline:none"/>
+    <input id="manualC" type="number" placeholder="C g" style="width:48px;background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:#fbbf24;font-size:12px;outline:none"/>
+    <input id="manualF" type="number" placeholder="F g" style="width:48px;background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:#fb923c;font-size:12px;outline:none"/>
+    <button onclick="submitManual('${foodName.replace(/'/g,"\\'")}'')" style="background:var(--green);border:none;border-radius:6px;padding:4px 10px;color:#000;font-weight:700;font-size:12px;cursor:pointer">+</button>
+  </div>`;
+}
+
+function submitManual(foodName) {
+  const kcal=parseInt(document.getElementById('manualKcal')?.value)||0;
+  if(!kcal){ document.getElementById('manualKcal').style.borderColor='#ef4444'; return; }
+  const p=parseInt(document.getElementById('manualP')?.value)||0;
+  const c=parseInt(document.getElementById('manualC')?.value)||0;
+  const f=parseInt(document.getElementById('manualF')?.value)||0;
+  addMacroEntry(foodName, kcal, p, c, f, 0);
+  document.getElementById('macroFoodInput').value='';
+  const statusEl=document.getElementById('macroAiStatus');
+  statusEl.innerHTML=''; statusEl.textContent=`✓ ${kcal} kcal додадено`;
+  statusEl.style.color='#4ade80';
+  setTimeout(()=>{ if(statusEl) statusEl.textContent=''; },2000);
 }
 
 function addMacroEntry(food, kcal, protein=0, carbs=0, fat=0, sugar=0) {
@@ -1320,8 +1520,49 @@ function renderAll() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-renderAll();
-scheduleNotifications();
+let _remoteUpdatePending = false;
+
+function boot() {
+  initDefaults();
+  renderAll();
+  scheduleNotifications();
+  document.getElementById('loadingOverlay').style.display='none';
+}
+
+function startFirebaseSync() {
+  const r = window._fbRef(window._fbDb, window._fbDataRef);
+  // Initial load from Firebase
+  window._fbOnValue(r, (snapshot) => {
+    const remote = snapshot.val();
+    if(remote && typeof remote === 'object'){
+      // Merge remote into local — remote wins for settings, merge days
+      const local = loadData();
+      const merged = Object.assign({}, local, remote);
+      // Deep merge days so no day is lost
+      merged.days = Object.assign({}, local.days||{}, remote.days||{});
+      data = merged;
+      localStorage.setItem('trackData', JSON.stringify(data));
+    }
+    if(!window._booted){
+      window._booted = true;
+      boot();
+    } else {
+      // Live update from another device
+      renderAll();
+    }
+  }, (error) => {
+    console.warn('Firebase read error:', error);
+    if(!window._booted){ window._booted=true; boot(); }
+  });
+}
+
+if(window._fbReady){
+  startFirebaseSync();
+} else {
+  window.addEventListener('firebase-ready', startFirebaseSync);
+  // Fallback: if Firebase never loads, boot from localStorage after 4s
+  setTimeout(()=>{ if(!window._booted){ window._booted=true; boot(); } }, 4000);
+}
 </script>
 </body>
 </html>
