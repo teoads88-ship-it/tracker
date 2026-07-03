@@ -442,7 +442,7 @@
 <!-- Firebase -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDuXDFnEWeueNsTLlNnaTIwhAi3TIgt1Wc",
@@ -454,18 +454,34 @@ const firebaseConfig = {
   appId: "1:167709297952:web:bac600fc6ba7e5e9c8db45"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const DATA_REF = 'tracker/main';
+try {
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const DATA_REF = 'tracker/main';
 
-// Expose to global scope for main script
-window._fbDb = db;
-window._fbRef = ref;
-window._fbSet = set;
-window._fbOnValue = onValue;
-window._fbDataRef = DATA_REF;
-window._fbReady = true;
-window.dispatchEvent(new Event('firebase-ready'));
+  window._fbDb = db;
+  window._fbRef = ref;
+  window._fbSet = set;
+  window._fbOnValue = onValue;
+  window._fbDataRef = DATA_REF;
+
+  // Listen for data changes and push to main script via custom event
+  onValue(ref(db, DATA_REF), (snapshot) => {
+    const remote = snapshot.val();
+    window.dispatchEvent(new CustomEvent('fb-data', { detail: remote }));
+  }, (err) => {
+    window.dispatchEvent(new CustomEvent('fb-error', { detail: err }));
+  });
+
+  // Expose save function
+  window._fbSave = (d) => set(ref(db, DATA_REF), d).catch(e => console.warn('FB write:', e));
+
+  window._fbReady = true;
+  window.dispatchEvent(new Event('firebase-ready'));
+} catch(e) {
+  console.warn('Firebase init error:', e);
+  window.dispatchEvent(new Event('firebase-ready'));
+}
 </script>
 
 <script>
@@ -491,19 +507,11 @@ function getDayOfWeek() { const d=new Date().getDay(); return d===0?6:d-1; }
 // ─── FIREBASE SYNC ────────────────────────────────────────────────────────────
 let _savePending = false;
 function loadData() { try { return JSON.parse(localStorage.getItem('trackData'))||{}; } catch(e){return{};} }
+let _saveTimer = null;
 function saveData(d) {
   localStorage.setItem('trackData', JSON.stringify(d));
-  // Debounced Firebase write
-  if(!_savePending){
-    _savePending=true;
-    setTimeout(()=>{
-      _savePending=false;
-      if(window._fbDb){
-        const r=window._fbRef(window._fbDb, window._fbDataRef);
-        window._fbSet(r, d).catch(e=>console.warn('Firebase write error:',e));
-      }
-    }, 800);
-  }
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => { if(window._fbSave) window._fbSave(d); }, 1000);
 }
 
 let data = loadData();
@@ -1527,49 +1535,36 @@ function renderAll() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-let _remoteUpdatePending = false;
-
 function boot() {
   initDefaults();
   renderAll();
   scheduleNotifications();
-  document.getElementById('loadingOverlay').style.display='none';
+  const ol = document.getElementById('loadingOverlay');
+  if(ol) ol.style.display='none';
 }
 
-function startFirebaseSync() {
-  const r = window._fbRef(window._fbDb, window._fbDataRef);
-  // Initial load from Firebase
-  window._fbOnValue(r, (snapshot) => {
-    const remote = snapshot.val();
-    if(remote && typeof remote === 'object'){
-      // Merge remote into local — remote wins for settings, merge days
-      const local = loadData();
-      const merged = Object.assign({}, local, remote);
-      // Deep merge days so no day is lost
-      merged.days = Object.assign({}, local.days||{}, remote.days||{});
-      data = merged;
-      localStorage.setItem('trackData', JSON.stringify(data));
-    }
-    if(!window._booted){
-      window._booted = true;
-      boot();
-    } else {
-      // Live update from another device
-      renderAll();
-    }
-  }, (error) => {
-    console.warn('Firebase read error:', error);
-    if(!window._booted){ window._booted=true; boot(); }
-  });
+function applyRemoteData(remote) {
+  if(!remote || typeof remote !== 'object') return;
+  const local = loadData();
+  const merged = Object.assign({}, local, remote);
+  merged.days = Object.assign({}, local.days||{}, remote.days||{});
+  data = merged;
+  localStorage.setItem('trackData', JSON.stringify(data));
 }
 
-if(window._fbReady){
-  startFirebaseSync();
-} else {
-  window.addEventListener('firebase-ready', startFirebaseSync);
-  // Fallback: if Firebase never loads, boot from localStorage after 4s
-  setTimeout(()=>{ if(!window._booted){ window._booted=true; boot(); } }, 4000);
-}
+// Listen for Firebase data events dispatched from module script
+window.addEventListener('fb-data', (e) => {
+  applyRemoteData(e.detail);
+  if(!window._booted){ window._booted=true; boot(); }
+  else renderAll();
+});
+
+window.addEventListener('fb-error', () => {
+  if(!window._booted){ window._booted=true; boot(); }
+});
+
+// Fallback: boot from localStorage if Firebase doesn't respond in 4s
+setTimeout(() => { if(!window._booted){ window._booted=true; boot(); } }, 4000);
 </script>
 </body>
 </html>
