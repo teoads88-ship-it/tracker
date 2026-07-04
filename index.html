@@ -251,12 +251,9 @@
 
   <!-- SUNSHINE ROW (toggled from settings) — always stays, just fades -->
   <div id="sunshineBtn" style="display:none;margin-bottom:10px">
-    <div style="display:flex;align-items:center;gap:8px">
-      <div id="sunshineBar" onclick="toggleSunshine()" style="flex:1;background:linear-gradient(90deg,#1c1400,#2d2000);border:1px solid #92400e;border-radius:8px;padding:9px 14px;cursor:pointer;transition:all .8s ease;display:flex;align-items:center;gap:8px">
-        <span style="font-size:14px">☀️</span>
-        <span id="sunshineTxt" style="font-size:11px;font-weight:700;letter-spacing:2px;color:#fde68a;transition:color .8s ease">EARLY 15min SUN SHINE</span>
-      </div>
-      <button id="sunshineXBtn" onclick="hideSunForToday()" title="скрий за днес" style="background:none;border:1px solid #374151;border-radius:6px;color:#4b5563;font-size:14px;padding:6px 8px;cursor:pointer;transition:color .2s;flex-shrink:0">✕</button>
+    <div id="sunshineBar" onclick="toggleSunshine()" style="flex:1;background:linear-gradient(90deg,#1c1400,#2d2000);border:1px solid #92400e;border-radius:8px;padding:9px 14px;cursor:pointer;transition:all .8s ease;display:flex;align-items:center;gap:8px">
+      <span style="font-size:14px">☀️</span>
+      <span id="sunshineTxt" style="font-size:11px;font-weight:700;letter-spacing:2px;color:#fde68a;transition:color .8s ease">EARLY 15min SUN SHINE</span>
     </div>
   </div>
 
@@ -600,13 +597,18 @@ let sunActive=false;
 function toggleSunshine() {
   const td=getToday();
   if(td.sunshineUsed) return;
+  // Only allowed before 12:00
+  const now=new Date();
+  if(now.getHours()>=12){
+    const txt=document.getElementById('sunshineTxt');
+    if(txt){ txt.textContent='⛔ Само преди 12:00'; setTimeout(()=>{ txt.textContent='EARLY 15min SUN SHINE'; },2000); }
+    return;
+  }
   sunActive=true;
   td.sunshineUsed=true;
   td.sunshine=true;
   saveData(data);
   applySunEffect(true);
-  const xBtn=document.getElementById('sunshineXBtn');
-  if(xBtn) xBtn.style.display='none';
   refreshAll();
 }
 
@@ -843,15 +845,12 @@ function buildSectionHTML(id) {
       <div class="card">
         <div class="card-title">📊 Калории тази седмица</div>
         <div class="week-strip" id="weekStrip"></div>
-        <div style="display:flex;align-items:center;gap:8px;margin:8px 0;padding:8px;background:var(--card2);border-radius:8px;border:1px solid var(--border)">
-          <span style="font-size:12px;color:var(--muted);flex:1">⚖️ Тегло тази седмица</span>
-          <input type="number" id="weekWeightInput" placeholder="кг" step="0.1" style="width:70px;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:13px;outline:none;text-align:center" oninput="saveWeekWeight()"/>
-          <span style="font-size:11px;color:var(--muted)" id="weekWeightPrev"></span>
-        </div>
-        <button class="show-history-btn" onclick="toggleHistory()">▼ Show history</button>
-        <div class="history-panel" id="historyPanel">
-          <div class="history-bar-chart" id="historyChart"></div>
-          <div class="history-avg" id="historyAvg"></div>
+        <div style="font-size:12px;color:#94a3b8;text-align:center;margin:4px 0 8px;font-weight:500" id="weekAvgLabel"></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--card2);border-radius:8px;border:1px solid var(--border)">
+          <span style="font-size:12px;color:#cbd5e1;font-weight:500">⚖️ Тегло тази седмица</span>
+          <input type="number" id="weekWeightInput" placeholder="кг" step="0.1" style="width:64px;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:13px;outline:none;text-align:center;margin-left:4px" oninput="saveWeekWeight()"/>
+          <span style="font-size:11px;color:#94a3b8" id="weekWeightPrev" style="margin-left:auto"></span>
+          <span style="font-size:12px;color:#94a3b8;margin-left:auto;font-weight:500" id="weekTotalCal"></span>
         </div>
       </div>`;
     default: return '';
@@ -1012,7 +1011,7 @@ function loadWeekWeight() {
   const prevKey=prevMon.toISOString().slice(0,10);
   const prev=data.weeklyWeights[prevKey];
   const prevEl=document.getElementById('weekWeightPrev');
-  if(prevEl) prevEl.textContent=prev?`пред: ${prev}кг`:'';
+  if(prevEl) prevEl.innerHTML=prev?`пред: <span style="color:#e2e8f0;font-weight:600">${prev}кг</span>`:'';
 }
 
 function toggleMacroBreakdown() {
@@ -1125,20 +1124,35 @@ const BG_NUMBERS = {'едно':1,'един':1,'една':1,'две':2,'два':2
 function parseFood(text) {
   const t = text.toLowerCase().trim();
 
-  // Extract quantity — digits or BG words
-  let qty = 1, cleanText = t;
-  const numMatch = t.match(/^(\d+(?:[.,]\d+)?)\s*/);
-  if(numMatch){ qty=parseFloat(numMatch[1].replace(',','.')); cleanText=t.slice(numMatch[0].length); }
+  // Pattern: "3 пиле 500" → qty=3, food=пиле, grams=500
+  // Pattern: "пиле 500" → qty=1, food=пиле, grams=500
+  // Pattern: "3 яйца" → qty=3, food=яйца, grams=null
+  // Pattern: "пиле 180g" → qty=1, food=пиле, grams=180
+
+  let qty = 1, grams = null, cleanText = t;
+
+  // Extract leading qty (digit or BG word)
+  const leadNum = t.match(/^(\d+(?:[.,]\d+)?)\s+/);
+  if(leadNum){ qty=parseFloat(leadNum[1].replace(',','.')); cleanText=t.slice(leadNum[0].length); }
   else {
     for(const [word, val] of Object.entries(BG_NUMBERS)){
       if(t.startsWith(word+' ')){ qty=val; cleanText=t.slice(word.length+1); break; }
     }
   }
 
-  // Extract weight in grams — "180g" or "180 g" or "180гр"
-  let grams = null;
+  // Extract explicit grams: "180g", "180гр", "180 грама"
   const gramMatch = cleanText.match(/(\d+(?:[.,]\d+)?)\s*(?:g|гр|грама|gram)/i);
-  if(gramMatch){ grams=parseFloat(gramMatch[1].replace(',','.')); cleanText=cleanText.replace(gramMatch[0],'').trim(); }
+  if(gramMatch){
+    grams=parseFloat(gramMatch[1].replace(',','.'));
+    cleanText=cleanText.replace(gramMatch[0],'').trim();
+  } else {
+    // Trailing bare number → treat as grams (e.g. "пиле 500")
+    const trailNum = cleanText.match(/\s+(\d+(?:[.,]\d+)?)$/);
+    if(trailNum){
+      grams=parseFloat(trailNum[1].replace(',','.'));
+      cleanText=cleanText.slice(0, cleanText.length - trailNum[0].length).trim();
+    }
+  }
 
   // Find best matching food
   let best = null, bestScore = 0;
@@ -1153,25 +1167,23 @@ function parseFood(text) {
 
   if(!best) return null;
 
-  let multiplier;
   if(best.unit==='бр'){
-    // Single-unit item: qty = number of pieces
-    multiplier = qty;
-    const totalKcal = Math.round(best.kcal * multiplier);
+    const multiplier = qty;
     return {
       name: qty===1 ? best.name : `${qty}x ${best.name}`,
-      kcal: totalKcal,
+      kcal: Math.round(best.kcal * multiplier),
       protein: Math.round(best.protein * multiplier),
       carbs: Math.round(best.carbs * multiplier),
       fat: Math.round(best.fat * multiplier),
       sugar: Math.round(best.sugar * multiplier)
     };
   } else {
-    // Weight-based: use provided grams or assume 100g
-    const g = grams || (qty > 1 ? qty * 100 : 100);
+    // Weight-based: grams explicit, or 100g default; qty multiplies on top
+    const g = (grams || 100) * qty;
     const factor = g / 100;
+    const label = qty>1 ? `${qty}x ${grams||100}g` : `${grams||100}g`;
     return {
-      name: `${best.name} ${g}g`,
+      name: `${best.name} ${label}`,
       kcal: Math.round(best.kcal * factor),
       protein: Math.round(best.protein * factor),
       carbs: Math.round(best.carbs * factor),
@@ -1268,12 +1280,35 @@ function renderWeekStrip() {
   const el=document.getElementById('weekStrip'); if(!el) return;
   const today=new Date(), dow=today.getDay()===0?6:today.getDay()-1;
   el.innerHTML='';
+  const vals=[];
   for(let i=0;i<7;i++){
     const d=new Date(today); d.setDate(today.getDate()-dow+i);
-    const key=d.toISOString().slice(0,10), cal=(data.weeklyCalories||{})[key]||0;
+    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const limit=data.settings.calLimit||650;
+    const consumed=(data.weeklyCalories||{})[key]||0;
+    const remaining=consumed>0?limit-consumed:null;
+    const isNeg=remaining!==null&&remaining<0;
+    const isToday=key===todayKey;
     const div=document.createElement('div'); div.className='week-day';
-    div.innerHTML=`<div class="week-day-label">${DAYS[i]}</div><div class="week-day-box ${cal>0?'has-data':''} ${key===todayKey?'today-box':''}">${cal>0?cal:''}</div>`;
+    div.innerHTML=`<div class="week-day-label">${DAYS[i]}</div>
+      <div class="week-day-box ${consumed>0?'has-data':''} ${isToday?'today-box':''}" style="${isNeg?'color:#ef4444!important;border-color:#7f1d1d':''}">${consumed>0?consumed:''}</div>`;
     el.appendChild(div);
+    if(consumed>0) vals.push(consumed);
+  }
+  const avgEl=document.getElementById('weekAvgLabel');
+  if(avgEl){
+    if(vals.length>0){
+      const avg=Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
+      const col=avg>750?'#ef4444':'#4ade80';
+      avgEl.innerHTML=`Средно <span style="color:${col};font-weight:700">${avg}</span> kcal/ден`;
+    } else avgEl.textContent='';
+  }
+  const totalEl=document.getElementById('weekTotalCal');
+  if(totalEl){
+    if(vals.length>0){
+      const total=vals.reduce((a,b)=>a+b,0);
+      totalEl.innerHTML=`Общо: <span style="color:#e2e8f0;font-weight:700">${total}</span> kcal`;
+    } else totalEl.textContent='';
   }
 }
 
