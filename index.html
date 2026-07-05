@@ -1840,16 +1840,12 @@ function toggleExtra(key) {
 
 function moveSect(id, dir) {
   const s=data.settings;
-  // Build complete current order from what's displayed
   const ext=s.extraEnabled||{};
-  const base=['tasks1','gym1','macros','hygiene','calories'];
+  const base=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','calories'];
   const extras=Object.keys(ext).filter(k=>ext[k]&&['tasks2','gym2'].includes(k));
-  // Ensure sectionOrder contains all active sections
   if(!s.sectionOrder) s.sectionOrder=[...base];
-  extras.forEach(k=>{ if(!s.sectionOrder.includes(k)) s.sectionOrder.push(k); });
-  // Remove any stale entries
-  const active=new Set([...base,...extras]);
-  s.sectionOrder=s.sectionOrder.filter(x=>active.has(x));
+  // Ensure all active sections are present
+  base.forEach(k=>{ if(!s.sectionOrder.includes(k)) s.sectionOrder.push(k); });
   const order=s.sectionOrder;
   const idx=order.indexOf(id);
   if(idx===-1) return;
