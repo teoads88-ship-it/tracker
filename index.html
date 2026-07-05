@@ -262,12 +262,12 @@
 
   <!-- COLLAPSED MINI BAR — click to expand -->
   <div id="gaugeMiniPanel" style="display:none;margin-bottom:10px;cursor:pointer" onclick="toggleGaugeCollapse()">
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:10px">
-      <span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#94a3b8;text-transform:uppercase;flex-shrink:0">Overall</span>
-      <div style="flex:1;height:6px;background:#7f1d1d;border-radius:3px;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#ffffff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.3)">
+      <span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#475569;text-transform:uppercase;flex-shrink:0">Today Score</span>
+      <div style="flex:1;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden">
         <div id="miniBarFill" style="height:100%;border-radius:3px;background:#ef4444;transition:width .6s ease,background .6s ease;width:0%"></div>
       </div>
-      <span id="miniBarPct" style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:#fff;flex-shrink:0">0%</span>
+      <span id="miniBarPct" style="font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;color:#0f172a;flex-shrink:0">0%</span>
     </div>
   </div>
 
@@ -419,6 +419,10 @@
       <div class="toggle-row">
         <span class="toggle-label">Втора Gym секция</span>
         <button class="toggle" id="toggleGym2" onclick="toggleExtra('gym2')"></button>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Hygiene карта</span>
+        <button class="toggle" id="toggleHygieneExtra" onclick="toggleExtra('hygiene_extra')"></button>
       </div>
       <div class="toggle-row">
         <span class="toggle-label">☀ Early Sunshine бутон</span>
@@ -576,7 +580,7 @@ function initDefaults() {
   if (!s.habitOrder) s.habitOrder = ['finance','body','hygiene','health'];
   if (!s.weeklyIntention) s.weeklyIntention = '';
   if (!s.weeklyIntentionTitle) s.weeklyIntentionTitle = 'Седмично намерение';
-  if (!s.extraEnabled) s.extraEnabled = { tasks2:true, gym2:true, sunshine:false };
+  if (!s.extraEnabled) s.extraEnabled = { tasks2:true, gym2:true, sunshine:false, hygiene_extra:true };
   if (!data.days) data.days = {};
   saveData(data);
 }
@@ -715,7 +719,41 @@ function submitInlineAdd(type) {
   refreshAll();
 }
 // ─── CARD COLLAPSE ────────────────────────────────────────────────────────────
-const cardCollapseState = {};
+// ─── CARD COLLAPSE (persistent) ──────────────────────────────────────────────
+const ALL_CARD_BODIES = ['tasks1Body','tasks2Body','gym1Body','gym2Body','hygieneBody','hygieneExtraBody'];
+
+function getCardState() {
+  if(!data.settings.cardCollapse) data.settings.cardCollapse={};
+  return data.settings.cardCollapse;
+}
+
+function isCardCollapsed(bodyId) {
+  const cs=getCardState();
+  // Default: collapsed (true) unless explicitly set to false
+  return cs[bodyId]!==false;
+}
+
+function applyCardCollapseStates() {
+  ALL_CARD_BODIES.forEach(bodyId=>{
+    const miniId=bodyId.replace('Body','Mini');
+    const body=document.getElementById(bodyId);
+    const mini=document.getElementById(miniId);
+    if(!body||!mini) return;
+    const collapsed=isCardCollapsed(bodyId);
+    body.style.display=collapsed?'none':'';
+    mini.style.display=collapsed?'inline-flex':'none';
+    // Set data-collapsed on parent card-title
+    const title=body.parentElement?.querySelector('.card-title');
+    if(title) title.setAttribute('data-collapsed', collapsed?'true':'false');
+    if(collapsed) renderMiniGauge(miniId, BODY_TO_TYPE[bodyId]);
+  });
+}
+
+const BODY_TO_TYPE = {
+  tasks1Body:'finance', tasks2Body:'finance2',
+  gym1Body:'gym1', gym2Body:'gym2',
+  hygieneBody:'hygiene', hygieneExtraBody:'hygiene_extra'
+};
 
 function miniGaugePct(type) {
   const td=getToday(), s=data.settings;
@@ -733,11 +771,21 @@ function miniGaugePct(type) {
 function renderMiniGauge(miniId, type) {
   const el=document.getElementById(miniId); if(!el) return;
   const pct=miniGaugePct(type);
-  let col; if(pct>=80) col='#4ade80'; else if(pct>=50) col='#16a34a'; else col='#ef4444';
+  let col;
+  if(pct===0)      col='#ef4444';   // ярко червено
+  else if(pct<50)  col='#ef4444';   // червено
+  else if(pct<80)  col='#16a34a';   // тъмно зелено
+  else             col='#4ade80';   // ярко зелено
+
+  // Track background: bright red when 0, dim red otherwise
+  const trackCol = pct===0 ? '#7f1d1d' : '#1e293b';
+
   const fill=el.querySelector('.cmg-fill');
   const pctEl=el.querySelector('.cmg-pct');
+  const bar=el.querySelector('.card-mini-gauge-bar');
+  if(bar) bar.style.background=trackCol;
   if(fill){ fill.style.width=pct+'%'; fill.style.background=col; }
-  if(pctEl) pctEl.textContent=pct+'%';
+  if(pctEl){ pctEl.textContent=pct+'%'; pctEl.style.color=col; }
 }
 
 function toggleCardCollapse(bodyId, miniId, titleEl, type) {
@@ -749,13 +797,15 @@ function toggleCardCollapse(bodyId, miniId, titleEl, type) {
     body.style.display='';
     mini.style.display='none';
     titleEl.setAttribute('data-collapsed','false');
+    getCardState()[bodyId]=false;
   } else {
     body.style.display='none';
     mini.style.display='inline-flex';
     renderMiniGauge(miniId, type);
     titleEl.setAttribute('data-collapsed','true');
+    getCardState()[bodyId]=true;
   }
-  cardCollapseState[bodyId]=!collapsed;
+  saveData(data);
 }
 
 // ─── TOMORROW TASKS ───────────────────────────────────────────────────────────
@@ -822,11 +872,10 @@ function removeTomorrowTask(type, idx) {
 }
 
 function updateAllMiniGauges() {
-  const map={tasks1Body:'tasks1Mini',tasks2Body:'tasks2Mini',gym1Body:'gym1Mini',gym2Body:'gym2Mini',hygieneBody:'hygieneMini',hygieneExtraBody:'hygieneExtraMini'};
-  const types={tasks1Body:'finance',tasks2Body:'finance2',gym1Body:'gym1',gym2Body:'gym2',hygieneBody:'hygiene',hygieneExtraBody:'hygiene_extra'};
-  Object.entries(map).forEach(([bodyId,miniId])=>{
+  ALL_CARD_BODIES.forEach(bodyId=>{
+    const miniId=bodyId.replace('Body','Mini');
     const body=document.getElementById(bodyId);
-    if(body&&body.style.display==='none') renderMiniGauge(miniId,types[bodyId]);
+    if(body&&body.style.display==='none') renderMiniGauge(miniId, BODY_TO_TYPE[bodyId]);
   });
 }
 
@@ -847,10 +896,11 @@ function updateMiniBar() {
   fill.style.width = pct + '%';
   label.textContent = pct + '%';
   let col;
-  if(pct >= 80) col = '#4ade80';
-  else if(pct >= 50) col = '#16a34a';
-  else col = '#ef4444';
+  if(pct >= 80) col = '#16a34a';
+  else if(pct >= 50) col = '#15803d';
+  else col = '#dc2626';
   fill.style.background = col;
+  label.style.color = col;
 }
 let sunActive=false;
 
@@ -1122,7 +1172,7 @@ function buildSectionHTML(id) {
           </div>
         </div>
       </div>`;
-    case 'hygiene_extra': return `
+    case 'hygiene_extra': return (s.extraEnabled?.hygiene_extra!==false)?`
       <div class="card" id="hygieneExtraCard">
         <div class="card-title" style="cursor:pointer" onclick="toggleCardCollapse('hygieneExtraBody','hygieneExtraMini',this,'hygiene_extra')">
           🧼 Hygiene
@@ -1132,7 +1182,7 @@ function buildSectionHTML(id) {
           <div id="hygieneExtraTasks"></div>
           <div id="inlineAdd_hygiene_extra" style="display:none"></div>
         </div>
-      </div>`;
+      </div>`:'';
     case 'calories': return `
       <div class="card">
         <div class="card-title">📊 Калории тази седмица</div>
@@ -1160,6 +1210,7 @@ function renderSections() {
   const mfi=document.getElementById('macroFoodInput');
   if(mfi) mfi.addEventListener('keydown',e=>{if(e.key==='Enter') estimateAndAdd();});
   populateTaskSections();
+  applyCardCollapseStates();
 }
 
 function populateTaskSections() {
@@ -1790,6 +1841,8 @@ function populateSettings() {
     if(btn) ext[k]?btn.classList.add('on'):btn.classList.remove('on');
     document.getElementById('sSection_'+k).style.display=ext[k]?'':'none';
   });
+  const heBtn=document.getElementById('toggleHygieneExtra');
+  if(heBtn) ext.hygiene_extra!==false?heBtn.classList.add('on'):heBtn.classList.remove('on');
   const sunBtn=document.getElementById('toggleSunshine');
   if(sunBtn) ext.sunshine?sunBtn.classList.add('on'):sunBtn.classList.remove('on');
   // Habit order
@@ -1800,16 +1853,14 @@ function populateSettings() {
       <button onclick="moveHabit('${h}',-1)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px">↑</button>
       <button onclick="moveHabit('${h}',1)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px">↓</button>
     </div>`).join('');
-  // Section order — include extras if enabled
+  // Section order — display current order, add missing sections only once
   const baseSections=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','calories'];
-  const extraSections=Object.keys(ext).filter(k=>ext[k]&&['tasks2','gym2'].includes(k));
-  const activeSections=new Set([...baseSections,...extraSections]);
-  // Rebuild clean sectionOrder
-  if(!s.sectionOrder) s.sectionOrder=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','calories'];
-  extraSections.forEach(k=>{ if(!s.sectionOrder.includes(k)) s.sectionOrder.push(k); });
-  s.sectionOrder=s.sectionOrder.filter(x=>activeSections.has(x));
-  // Add any missing base sections
+  const activeSections=new Set(baseSections);
+  if(!s.sectionOrder) s.sectionOrder=[...baseSections];
+  // Add any missing without reordering existing
   baseSections.forEach(k=>{ if(!s.sectionOrder.includes(k)) s.sectionOrder.push(k); });
+  // Remove stale entries
+  s.sectionOrder=s.sectionOrder.filter(x=>activeSections.has(x));
   const sOrder=s.sectionOrder;
   document.getElementById('sSectionOrder').innerHTML=sOrder.map(id=>{
     const def=SECTION_DEFS.find(d=>d.id===id)||{label:id};
@@ -1828,13 +1879,17 @@ function toggleExtra(key) {
   const s=data.settings;
   if(!s.extraEnabled) s.extraEnabled={};
   s.extraEnabled[key]=!s.extraEnabled[key];
-  const btn=document.getElementById('toggle'+key.charAt(0).toUpperCase()+key.slice(1));
+  const btnId='toggle'+key.split('_').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join('');
+  const btn=document.getElementById(btnId);
   if(btn) s.extraEnabled[key]?btn.classList.add('on'):btn.classList.remove('on');
-  document.getElementById('sSection_'+key).style.display=s.extraEnabled[key]?'':'none';
+  // Show/hide corresponding settings section if it exists
+  const sSection=document.getElementById('sSection_'+key);
+  if(sSection) sSection.style.display=s.extraEnabled[key]?'':'none';
   if(!s.sectionOrder) s.sectionOrder=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','calories'];
   if(s.extraEnabled[key] && !s.sectionOrder.includes(key)) s.sectionOrder.push(key);
   if(!s.extraEnabled[key]) s.sectionOrder=s.sectionOrder.filter(x=>x!==key);
-  // Refresh the section order UI
+  saveData(data);
+  renderSections();
   populateSettings();
 }
 
@@ -1852,7 +1907,9 @@ function moveSect(id, dir) {
   const ni=idx+dir;
   if(ni<0||ni>=order.length) return;
   [order[idx],order[ni]]=[order[ni],order[idx]];
+  saveData(data);
   populateSettings();
+  renderSections();
 }
 
 function renderSettingItems(containerId, items, key) {
@@ -1878,6 +1935,7 @@ function moveHabit(habit, dir) {
   if(ni<0||ni>=order.length) return;
   [order[idx],order[ni]]=[order[ni],order[idx]];
   data.settings.habitOrder=order;
+  saveData(data);
   populateSettings();
 }
 
@@ -1908,7 +1966,7 @@ function saveSettings(silent=false) {
   ['nFinance','nGym','nMorning','nEvening','nMacro'].forEach(id=>{ s.notifs[id]=document.getElementById(id+'Toggle')?.classList.contains('on'); });
   saveData(data);
   if(!silent){ closeSettings(); renderAll(); scheduleNotifications(); }
-  else renderAll();
+  else { saveData(data); renderAll(); }
 }
 
 // ─── REFRESH ─────────────────────────────────────────────────────────────────
