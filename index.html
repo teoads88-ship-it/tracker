@@ -382,6 +382,13 @@
       <button class="settings-add-btn" onclick="addSettingItem('sHygieneExtra','hygieneExtra')">+ добави</button>
     </div>
 
+    <!-- HYGIENE 2 EXTRA -->
+    <div class="settings-section">
+      <div class="settings-section-title">🧼 Hygiene 2 – Задачи</div>
+      <div id="sHygiene2Extra"></div>
+      <button class="settings-add-btn" onclick="addSettingItem('sHygiene2Extra','hygiene2Extra')">+ добави</button>
+    </div>
+
     <!-- EVENING -->
     <div class="settings-section">
       <div class="settings-section-title">🌙 Evening – Заглавие</div>
@@ -423,6 +430,10 @@
       <div class="toggle-row">
         <span class="toggle-label">Hygiene карта</span>
         <button class="toggle" id="toggleHygieneExtra" onclick="toggleExtra('hygiene_extra')"></button>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Hygiene 2 карта</span>
+        <button class="toggle" id="toggleHygiene2Extra" onclick="toggleExtra('hygiene2_extra')"></button>
       </div>
       <div class="toggle-row">
         <span class="toggle-label">☀ Early Sunshine бутон</span>
@@ -537,7 +548,8 @@ const SECTION_DEFS = [
   { id:'calories', label:'📊 Калории седмицата',  canToggle:false },
   { id:'tasks2',   label:'📋 Today Tasks 2',       canToggle:true },
   { id:'gym2',     label:'💪 Gym Today 2',          canToggle:true },
-  { id:'hygiene_extra', label:'🧼 Hygiene',            canToggle:false },
+  { id:'hygiene_extra',  label:'🧼 Hygiene',             canToggle:false },
+  { id:'hygiene2_extra', label:'🧼 Hygiene 2',           canToggle:false },
 ];
 
 function getTodayKey() {
@@ -574,7 +586,8 @@ function initDefaults() {
   if (!s.gymWeekly2) s.gymWeekly2 = { mon:[], tue:[], wed:[], thu:[], fri:[], sat:[], sun:[] };
   if (!s.morning)   s.morning  = ['Измий зъби','Душ','Пий вода'];
   if (!s.evening)   s.evening  = ['Измий зъби','Скинкеър','Прочисти телефона'];
-  if (!s.hygieneExtra)  s.hygieneExtra  = [];
+  if (!s.hygieneExtra)   s.hygieneExtra   = [];
+  if (!s.hygiene2Extra)  s.hygiene2Extra  = [];
   if (!s.hygieneExtraLabel) s.hygieneExtraLabel = 'Hygiene';
   if (!s.notifs)    s.notifs   = {};
   if (!s.habitOrder) s.habitOrder = ['finance','body','hygiene','health'];
@@ -591,7 +604,7 @@ function getToday() {
   if (!data.days[todayKey]) {
     data.days[todayKey] = {
       financeDone:[], finance2Done:[], gymDone:[], gym2Done:[],
-      morningDone:[], eveningDone:[], hygieneExtraDone:[], macros:[], pct:0
+      morningDone:[], eveningDone:[], hygieneExtraDone:[], hygiene2ExtraDone:[], macros:[], pct:0
     };
   }
   return data.days[todayKey];
@@ -669,7 +682,8 @@ const INLINE_MAP = {
   finance2: { settingsKey:'financeTasks2', doneKey:'finance2Done', renderFn:()=>populateTaskSections() },
   gym1:     { settingsKey:'gymWeekly',     doneKey:'gymDone',      renderFn:()=>populateTaskSections(), isGym:true },
   gym2:     { settingsKey:'gymWeekly2',    doneKey:'gym2Done',     renderFn:()=>populateTaskSections(), isGym:true },
-  hygiene_extra: { settingsKey:'hygieneExtra', doneKey:'hygieneExtraDone', renderFn:()=>populateTaskSections() },
+  hygiene_extra:  { settingsKey:'hygieneExtra',  doneKey:'hygieneExtraDone',  renderFn:()=>populateTaskSections() },
+  hygiene2_extra: { settingsKey:'hygiene2Extra', doneKey:'hygiene2ExtraDone', renderFn:()=>populateTaskSections() },
   evening:  { settingsKey:'evening',       doneKey:'eveningDone',  renderFn:()=>populateTaskSections() },
 };
 
@@ -720,7 +734,7 @@ function submitInlineAdd(type) {
 }
 // ─── CARD COLLAPSE ────────────────────────────────────────────────────────────
 // ─── CARD COLLAPSE (persistent) ──────────────────────────────────────────────
-const ALL_CARD_BODIES = ['tasks1Body','tasks2Body','gym1Body','gym2Body','hygieneBody','hygieneExtraBody'];
+const ALL_CARD_BODIES = ['tasks1Body','tasks2Body','gym1Body','gym2Body','hygieneBody','hygieneExtraBody','hygiene2ExtraBody'];
 
 function getCardState() {
   if(!data.settings.cardCollapse) data.settings.cardCollapse={};
@@ -752,7 +766,7 @@ function applyCardCollapseStates() {
 const BODY_TO_TYPE = {
   tasks1Body:'finance', tasks2Body:'finance2',
   gym1Body:'gym1', gym2Body:'gym2',
-  hygieneBody:'hygiene', hygieneExtraBody:'hygiene_extra'
+  hygieneBody:'hygiene', hygieneExtraBody:'hygiene_extra', hygiene2ExtraBody:'hygiene2_extra'
 };
 
 function miniGaugePct(type) {
@@ -762,8 +776,9 @@ function miniGaugePct(type) {
     case 'finance2':{ const t=s.financeTasks2||[]; return t.length?Math.round(((td.finance2Done||[]).length/t.length)*100):0; }
     case 'gym1':{ const dk=DAY_KEYS[getDayOfWeek()],g=s.gymWeekly[dk]||[]; return g.length?Math.round(((td.gymDone||[]).length/g.length)*100):0; }
     case 'gym2':{ const dk=DAY_KEYS[getDayOfWeek()],g=s.gymWeekly2[dk]||[]; return g.length?Math.round(((td.gym2Done||[]).length/g.length)*100):0; }
-    case 'hygiene':{ const mo=s.morning||[],ev=s.evening||[],he=s.hygieneExtra||[],tot=mo.length+ev.length+he.length,done=(td.morningDone||[]).length+(td.eveningDone||[]).length+(td.hygieneExtraDone||[]).length; return tot?Math.round((done/tot)*100):0; }
+    case 'hygiene':{ const mo=s.morning||[],ev=s.evening||[],he=s.hygieneExtra||[],he2=s.hygiene2Extra||[],tot=mo.length+ev.length+he.length+he2.length,done=(td.morningDone||[]).length+(td.eveningDone||[]).length+(td.hygieneExtraDone||[]).length+(td.hygiene2ExtraDone||[]).length; return tot?Math.round((done/tot)*100):0; }
     case 'hygiene_extra':{ const he=s.hygieneExtra||[]; return he.length?Math.round(((td.hygieneExtraDone||[]).length/he.length)*100):0; }
+    case 'hygiene2_extra':{ const he=s.hygiene2Extra||[]; return he.length?Math.round(((td.hygiene2ExtraDone||[]).length/he.length)*100):0; }
     default: return 0;
   }
 }
@@ -994,6 +1009,7 @@ function updateCardStates() {
     updateCardState('gym2Card', data.settings.gymWeekly2[dk]||[], getToday().gym2Done||[]);
   // morning
   updateCardState('hygieneExtraCard', data.settings.hygieneExtra||[], getToday().hygieneExtraDone||[]);
+  updateCardState('hygiene2ExtraCard', data.settings.hygiene2Extra||[], getToday().hygiene2ExtraDone||[]);
   // evening
   updateCardState('eveningCard', data.settings.evening||[], getToday().eveningDone||[]);
 }
@@ -1034,9 +1050,22 @@ function habitColor(pct){ if(pct>=80) return '#4ade80'; if(pct>=50) return '#16a
 function calcHabitPct(habit) {
   const td=getToday(), s=data.settings;
   switch(habit){
-    case 'finance':{ const ft=s.financeTasks||[]; return ft.length?Math.round(((td.financeDone||[]).length/ft.length)*100):0; }
-    case 'body':{ const gym=s.gymWeekly[DAY_KEYS[getDayOfWeek()]]||[]; return gym.length?Math.round(((td.gymDone||[]).length/gym.length)*100):0; }
-    case 'hygiene':{ const mo=s.morning||[],ev=s.evening||[],he=s.hygieneExtra||[],tot=mo.length+ev.length+he.length,done=(td.morningDone||[]).length+(td.eveningDone||[]).length+(td.hygieneExtraDone||[]).length; return tot?Math.round((done/tot)*100):0; }
+    case 'finance':{
+      const ext=s.extraEnabled||{};
+      const ft=s.financeTasks||[], ft2=ext.tasks2!==false?(s.financeTasks2||[]):[];
+      const done=(td.financeDone||[]).length+(td.finance2Done||[]).length;
+      const total=ft.length+ft2.length;
+      return total?Math.round((done/total)*100):0;
+    }
+    case 'body':{
+      const ext=s.extraEnabled||{};
+      const dk=DAY_KEYS[getDayOfWeek()];
+      const gym=s.gymWeekly[dk]||[], gym2=ext.gym2!==false?(s.gymWeekly2?.[dk]||[]):[];
+      const done=(td.gymDone||[]).length+(td.gym2Done||[]).length;
+      const total=gym.length+gym2.length;
+      return total?Math.round((done/total)*100):0;
+    }
+    case 'hygiene':{ const mo=s.morning||[],ev=s.evening||[],he=s.hygieneExtra||[],he2=s.hygiene2Extra||[],tot=mo.length+ev.length+he.length+he2.length,done=(td.morningDone||[]).length+(td.eveningDone||[]).length+(td.hygieneExtraDone||[]).length+(td.hygiene2ExtraDone||[]).length; return tot?Math.round((done/tot)*100):0; }
     case 'health':{
       const limit=data.settings.calLimit||650;
       const consumed=(td.macros||[]).reduce((s,m)=>s+m.kcal,0);
@@ -1054,16 +1083,23 @@ function calcHabitPct(habit) {
 
 function calcOverallPct() {
   const td=getToday(), s=data.settings;
+  const ext=s.extraEnabled||{};
+  const dk=DAY_KEYS[getDayOfWeek()];
   let done=0, total=0;
+  // Finance (tasks1 + tasks2 if on)
   const ft=s.financeTasks||[]; total+=ft.length; done+=(td.financeDone||[]).length;
-  if(s.extraEnabled?.tasks2){ const ft2=s.financeTasks2||[]; total+=ft2.length; done+=(td.finance2Done||[]).length; }
-  const gym=s.gymWeekly[DAY_KEYS[getDayOfWeek()]]||[]; total+=gym.length; done+=(td.gymDone||[]).length;
-  if(s.extraEnabled?.gym2){ const gym2=s.gymWeekly2[DAY_KEYS[getDayOfWeek()]]||[]; total+=gym2.length; done+=(td.gym2Done||[]).length; }
-  const mo=s.morning||[],ev=s.evening||[],he=s.hygieneExtra||[]; total+=mo.length+ev.length+he.length; done+=(td.morningDone||[]).length+(td.eveningDone||[]).length+(td.hygieneExtraDone||[]).length;
+  if(ext.tasks2!==false){ const ft2=s.financeTasks2||[]; total+=ft2.length; done+=(td.finance2Done||[]).length; }
+  // Body (gym1 + gym2 if on)
+  const gym=s.gymWeekly[dk]||[]; total+=gym.length; done+=(td.gymDone||[]).length;
+  if(ext.gym2!==false){ const gym2=s.gymWeekly2?.[dk]||[]; total+=gym2.length; done+=(td.gym2Done||[]).length; }
+  // Hygiene (morning + evening + hygiene_extra + hygiene2_extra)
+  const mo=s.morning||[],ev=s.evening||[],he=s.hygieneExtra||[],he2=s.hygiene2Extra||[];
+  total+=mo.length+ev.length+he.length+he2.length;
+  done+=(td.morningDone||[]).length+(td.eveningDone||[]).length+(td.hygieneExtraDone||[]).length+(td.hygiene2ExtraDone||[]).length;
+  // Macros
   total+=1; if((td.macros||[]).length>0) done+=1;
-  // Sun = 15% fixed bonus if enabled and pressed
-  const sunEnabled=(s.extraEnabled||{}).sunshine;
-  const sunBonus=(sunEnabled && td.sunshine && !td.sunshineHidden)?15:0;
+  // Sun bonus
+  const sunBonus=(ext.sunshine && td.sunshine && !td.sunshineHidden)?15:0;
   const habitsPct=total===0?0:(done/total)*85;
   return Math.min(100, Math.round(habitsPct + sunBonus));
 }
@@ -1172,8 +1208,8 @@ function buildSectionHTML(id) {
           </div>
         </div>
       </div>`;
-    case 'hygiene_extra': return (s.extraEnabled?.hygiene_extra!==false)?`
-      <div class="card" id="hygieneExtraCard">
+    case 'hygiene_extra': return `
+      <div class="card" id="hygieneExtraCard" style="margin-bottom:10px">
         <div class="card-title" style="cursor:pointer" onclick="toggleCardCollapse('hygieneExtraBody','hygieneExtraMini',this,'hygiene_extra')">
           🧼 Hygiene
           <button onclick="showInlineAdd('hygiene_extra');event.stopPropagation()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 0 0 6px;line-height:1;margin-left:auto;flex-shrink:0;font-weight:300" class="card-add-btn">+</button>
@@ -1182,7 +1218,18 @@ function buildSectionHTML(id) {
           <div id="hygieneExtraTasks"></div>
           <div id="inlineAdd_hygiene_extra" style="display:none"></div>
         </div>
-      </div>`:'';
+      </div>`;
+    case 'hygiene2_extra': return `
+      <div class="card" id="hygiene2ExtraCard" style="margin-bottom:10px">
+        <div class="card-title" style="cursor:pointer" onclick="toggleCardCollapse('hygiene2ExtraBody','hygiene2ExtraMini',this,'hygiene2_extra')">
+          🧼 Hygiene 2
+          <button onclick="showInlineAdd('hygiene2_extra');event.stopPropagation()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 0 0 6px;line-height:1;margin-left:auto;flex-shrink:0;font-weight:300" class="card-add-btn">+</button>
+        <span id="hygiene2ExtraMini" class="card-mini-gauge-inline" style="display:none;flex:1;align-items:center;gap:6px;margin-left:8px"><span class="card-mini-gauge-bar" style="flex:1;height:5px;background:#7f1d1d;border-radius:3px;overflow:hidden"><span class="cmg-fill" style="display:block;height:100%;border-radius:3px;width:0%"></span></span><span class="cmg-pct" style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;color:#fff;white-space:nowrap">0%</span></span></div>
+        <div id="hygiene2ExtraBody">
+          <div id="hygiene2ExtraTasks"></div>
+          <div id="inlineAdd_hygiene2_extra" style="display:none"></div>
+        </div>
+      </div>`;
     case 'calories': return `
       <div class="card">
         <div class="card-title">📊 Калории тази седмица</div>
@@ -1200,13 +1247,27 @@ function buildSectionHTML(id) {
 }
 
 function renderSections() {
-  const order=data.settings.sectionOrder||['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','calories'];
-  const extra=data.settings.extraEnabled||{};
-  const allIds=[...order];
-  if(extra.tasks2 && !allIds.includes('tasks2')) allIds.push('tasks2');
-  if(extra.gym2   && !allIds.includes('gym2'))   allIds.push('gym2');
+  const s=data.settings;
+  // Ensure extraEnabled has hygiene_extra key
+  if(!s.extraEnabled) s.extraEnabled={};
+  if(s.extraEnabled.hygiene_extra===undefined) s.extraEnabled.hygiene_extra=true;
+  if(s.extraEnabled.hygiene2_extra===undefined) s.extraEnabled.hygiene2_extra=true;
+  // Ensure sectionOrder has all sections
+  const allBase=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','hygiene2_extra','calories'];
+  if(!s.sectionOrder) s.sectionOrder=[...allBase];
+  allBase.forEach(k=>{ if(!s.sectionOrder.includes(k)) s.sectionOrder.push(k); });
+
+  const order=s.sectionOrder;
+  const extra=s.extraEnabled;
+  const allIds=order.filter(id=>{
+    if(id==='tasks2') return extra.tasks2!==false;
+    if(id==='gym2')   return extra.gym2!==false;
+    if(id==='hygiene_extra') return extra.hygiene_extra!==false;
+    if(id==='hygiene2_extra') return extra.hygiene2_extra!==false;
+    return true;
+  });
+
   document.getElementById('sectionsContainer').innerHTML=allIds.map(id=>buildSectionHTML(id)).join('');
-  // Re-attach listeners
   const mfi=document.getElementById('macroFoodInput');
   if(mfi) mfi.addEventListener('keydown',e=>{if(e.key==='Enter') estimateAndAdd();});
   populateTaskSections();
@@ -1267,12 +1328,16 @@ function populateTaskSections() {
   if(het) het.innerHTML=(s.hygieneExtra||[]).map((t,i)=>`
     <div class="me-item ${(td.hygieneExtraDone||[]).includes(i)?'done':''}" onclick="toggleTask('hygiene_extra',${i},this)">
       <div class="me-check"></div><div class="me-name">${t}</div></div>`).join('');
+  const het2=document.getElementById('hygiene2ExtraTasks');
+  if(het2) het2.innerHTML=(s.hygiene2Extra||[]).map((t,i)=>`
+    <div class="me-item ${(td.hygiene2ExtraDone||[]).includes(i)?'done':''}" onclick="toggleTask('hygiene2_extra',${i},this)">
+      <div class="me-check"></div><div class="me-name">${t}</div></div>`).join('');
 }
 
 // ─── TOGGLE TASK ─────────────────────────────────────────────────────────────
 function toggleTask(type, idx, el) {
   const td=getToday();
-  const keyMap={finance:'financeDone',finance2:'finance2Done',gym:'gymDone',gym2:'gym2Done',morning:'morningDone',evening:'eveningDone',hygiene_extra:'hygieneExtraDone'};
+  const keyMap={finance:'financeDone',finance2:'finance2Done',gym:'gymDone',gym2:'gym2Done',morning:'morningDone',evening:'eveningDone',hygiene_extra:'hygieneExtraDone',hygiene2_extra:'hygiene2ExtraDone'};
   const key=keyMap[type];
   if(!td[key]) td[key]=[];
   const wasIn=td[key].includes(idx);
@@ -1831,6 +1896,7 @@ function populateSettings() {
     c.innerHTML=DAY_KEYS.map((dk,i)=>`<div class="gym-day-section"><div class="gym-day-title">${DAYS[i]}</div><textarea class="settings-input" id="sGym${sfx}_${dk}" rows="3" style="resize:vertical;width:100%">${(wkObj[dk]||[]).join('\n')}</textarea></div>`).join('');
   });
   renderSettingItems('sHygieneExtra', s.hygieneExtra||[], 'hygieneExtra');
+  renderSettingItems('sHygiene2Extra', s.hygiene2Extra||[], 'hygiene2Extra');
   renderSettingItems('sMorning', s.morning||[], 'morning');
   renderSettingItems('sEvening', s.evening||[], 'evening');
   document.getElementById('sCalLimit').value=s.calLimit||650;
@@ -1843,6 +1909,8 @@ function populateSettings() {
   });
   const heBtn=document.getElementById('toggleHygieneExtra');
   if(heBtn) ext.hygiene_extra!==false?heBtn.classList.add('on'):heBtn.classList.remove('on');
+  const he2Btn=document.getElementById('toggleHygiene2Extra');
+  if(he2Btn) ext.hygiene2_extra!==false?he2Btn.classList.add('on'):he2Btn.classList.remove('on');
   const sunBtn=document.getElementById('toggleSunshine');
   if(sunBtn) ext.sunshine?sunBtn.classList.add('on'):sunBtn.classList.remove('on');
   // Habit order
@@ -1854,7 +1922,7 @@ function populateSettings() {
       <button onclick="moveHabit('${h}',1)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px">↓</button>
     </div>`).join('');
   // Section order — display current order, add missing sections only once
-  const baseSections=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','calories'];
+  const baseSections=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','hygiene2_extra','calories'];
   const activeSections=new Set(baseSections);
   if(!s.sectionOrder) s.sectionOrder=[...baseSections];
   // Add any missing without reordering existing
@@ -1885,7 +1953,7 @@ function toggleExtra(key) {
   // Show/hide corresponding settings section if it exists
   const sSection=document.getElementById('sSection_'+key);
   if(sSection) sSection.style.display=s.extraEnabled[key]?'':'none';
-  if(!s.sectionOrder) s.sectionOrder=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','calories'];
+  if(!s.sectionOrder) s.sectionOrder=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','hygiene2_extra','calories'];
   if(s.extraEnabled[key] && !s.sectionOrder.includes(key)) s.sectionOrder.push(key);
   if(!s.extraEnabled[key]) s.sectionOrder=s.sectionOrder.filter(x=>x!==key);
   saveData(data);
@@ -1896,7 +1964,7 @@ function toggleExtra(key) {
 function moveSect(id, dir) {
   const s=data.settings;
   const ext=s.extraEnabled||{};
-  const base=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','calories'];
+  const base=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','hygiene2_extra','calories'];
   const extras=Object.keys(ext).filter(k=>ext[k]&&['tasks2','gym2'].includes(k));
   if(!s.sectionOrder) s.sectionOrder=[...base];
   // Ensure all active sections are present
@@ -1959,6 +2027,7 @@ function saveSettings(silent=false) {
     DAY_KEYS.forEach(dk=>{ const ta=document.getElementById('sGym'+sfx+'_'+dk); if(ta) wkObj[dk]=ta.value.split('\n').map(l=>l.trim()).filter(Boolean); });
   });
   s.hygieneExtra=Array.from(document.querySelectorAll('#sHygieneExtra input')).map(i=>i.value.trim()).filter(Boolean);
+  s.hygiene2Extra=Array.from(document.querySelectorAll('#sHygiene2Extra input')).map(i=>i.value.trim()).filter(Boolean);
   s.morning=Array.from(document.querySelectorAll('#sMorning input')).map(i=>i.value.trim()).filter(Boolean);
   s.evening=Array.from(document.querySelectorAll('#sEvening input')).map(i=>i.value.trim()).filter(Boolean);
   s.calLimit=parseInt(document.getElementById('sCalLimit').value)||650;
