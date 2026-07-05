@@ -33,9 +33,10 @@
   .mini-heatmap-days { display: grid; grid-template-columns: repeat(7,1fr); gap: 1px; font-size: 6px; color: var(--muted); text-align: center; width: 70px; }
   .mini-heatmap { display: grid; grid-template-columns: repeat(7,1fr); gap: 1px; width: 70px; }
   .heatmap-cell { width: 8px; height: 8px; border-radius: 1px; background: #1e293b; }
-  .heatmap-cell.g80 { background: #166534; box-shadow: 0 0 2px #22c55e44; }
-  .heatmap-cell.g70 { background: #92400e; }
-  .heatmap-cell.g60 { background: #7f1d1d; }
+  .heatmap-cell.g100 { background: #ffffff; box-shadow: 0 0 3px #ffffff88; }
+  .heatmap-cell.g80  { background: #16a34a; box-shadow: 0 0 2px #4ade8044; }
+  .heatmap-cell.g60  { background: #b45309; }
+  .heatmap-cell.glow { background: #991b1b; }
   .heatmap-cell.today { outline: 1px solid var(--accent); }
 
   /* GAUGE */
@@ -203,8 +204,11 @@
   <div class="header">
     <div class="streak-info">
       <span class="streak-label">Streak</span>
-      <div class="streak-val" id="streakVal">0 <span>days</span></div>
-      <button class="gear-btn" onclick="openSettings()">⚙</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="streak-val" id="streakVal">0 <span>days</span></div>
+        <button class="gear-btn" onclick="openSettings()" style="margin-top:0;font-size:16px">⚙</button>
+        <button class="gear-btn" onclick="toggleGaugeCollapse()" id="collapseBtn" style="margin-top:0;font-size:16px">▲</button>
+      </div>
     </div>
     <div class="title">TRACK</div>
     <div class="header-right">
@@ -215,46 +219,57 @@
     </div>
   </div>
 
-  <!-- GAUGE + HABITS -->
-  <div class="gauge-row" style="position:relative">
-    <!-- SUN BALL behind gauge — no rays, just ball + glow -->
-    <div id="sunBehindGauge" style="position:absolute;left:-10px;top:-18px;width:170px;height:110px;pointer-events:none;z-index:0;opacity:0;transition:opacity 1.2s ease">
-      <svg viewBox="0 0 170 110" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
-        <radialGradient id="sunGlow" cx="50%" cy="100%" r="70%" fx="50%" fy="100%">
-          <stop offset="0%"   stop-color="#fef08a" stop-opacity="0.6"/>
-          <stop offset="35%"  stop-color="#fbbf24" stop-opacity="0.25"/>
-          <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
-        </radialGradient>
-        <ellipse cx="85" cy="108" rx="80" ry="60" fill="url(#sunGlow)"/>
-        <clipPath id="topHalf"><rect x="0" y="0" width="170" height="108"/></clipPath>
-        <circle cx="85" cy="108" r="32" fill="#fbbf24" clip-path="url(#topHalf)"/>
-        <circle cx="85" cy="108" r="22" fill="#fef9c3" clip-path="url(#topHalf)" opacity="0.8"/>
-      </svg>
+  <!-- GAUGE + HABITS (collapsible) -->
+  <div id="gaugeFullPanel">
+    <div class="gauge-row" style="position:relative">
+      <div id="sunBehindGauge" style="position:absolute;left:-10px;top:-18px;width:170px;height:110px;pointer-events:none;z-index:0;opacity:0;transition:opacity 1.2s ease">
+        <svg viewBox="0 0 170 110" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+          <radialGradient id="sunGlow" cx="50%" cy="100%" r="70%" fx="50%" fy="100%">
+            <stop offset="0%"   stop-color="#fef08a" stop-opacity="0.6"/>
+            <stop offset="35%"  stop-color="#fbbf24" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+          </radialGradient>
+          <ellipse cx="85" cy="108" rx="80" ry="60" fill="url(#sunGlow)"/>
+          <clipPath id="topHalf"><rect x="0" y="0" width="170" height="108"/></clipPath>
+          <circle cx="85" cy="108" r="32" fill="#fbbf24" clip-path="url(#topHalf)"/>
+          <circle cx="85" cy="108" r="22" fill="#fef9c3" clip-path="url(#topHalf)" opacity="0.8"/>
+        </svg>
+      </div>
+      <div class="gauge-wrap" style="position:relative;z-index:1">
+        <canvas id="fireCanvas"></canvas>
+        <svg class="gauge-svg" viewBox="0 0 140 80" id="gaugeSvg" style="position:relative;z-index:1">
+          <path d="M 10 75 A 60 60 0 0 1 130 75" fill="none" stroke="#7f1d1d" stroke-width="10" stroke-linecap="round"/>
+          <path d="M 10 75 A 60 60 0 0 1 130 75" fill="none" stroke="#ef4444" stroke-width="10" stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="188.5" id="gaugeFill" style="transition:stroke-dashoffset .6s cubic-bezier(.34,1.56,.64,1),stroke .6s ease"/>
+          <line id="gaugeNeedle" x1="70" y1="75" x2="70" y2="22" stroke="#e2e8f0" stroke-width="2" stroke-linecap="round" style="transform-origin:70px 75px;transform:rotate(-90deg);transition:transform .6s cubic-bezier(.34,1.56,.64,1)"/>
+          <circle cx="70" cy="75" r="4" fill="#e2e8f0"/>
+        </svg>
+        <div class="gauge-pct-label" id="gaugePctLabel" style="position:relative;z-index:1">0%<span class="gauge-sub">optimised</span></div>
+      </div>
+      <div class="habits-list" id="habitsList"></div>
     </div>
-    <div class="gauge-wrap" style="position:relative;z-index:1">
-      <canvas id="fireCanvas"></canvas>
-      <svg class="gauge-svg" viewBox="0 0 140 80" id="gaugeSvg" style="position:relative;z-index:1">
-        <path d="M 10 75 A 60 60 0 0 1 130 75" fill="none" stroke="#7f1d1d" stroke-width="10" stroke-linecap="round"/>
-        <path d="M 10 75 A 60 60 0 0 1 130 75" fill="none" stroke="#ef4444" stroke-width="10" stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="188.5" id="gaugeFill" style="transition:stroke-dashoffset .6s cubic-bezier(.34,1.56,.64,1),stroke .6s ease"/>
-        <line id="gaugeNeedle" x1="70" y1="75" x2="70" y2="22" stroke="#e2e8f0" stroke-width="2" stroke-linecap="round" style="transform-origin:70px 75px;transform:rotate(-90deg);transition:transform .6s cubic-bezier(.34,1.56,.64,1)"/>
-        <circle cx="70" cy="75" r="4" fill="#e2e8f0"/>
-      </svg>
-      <div class="gauge-pct-label" id="gaugePctLabel" style="position:relative;z-index:1">0%<span class="gauge-sub">optimised</span></div>
+    <!-- SUNSHINE ROW — below gauge, above intention -->
+    <div id="sunshineBtn" style="display:none;margin-bottom:10px">
+      <div id="sunshineBar" onclick="toggleSunshine()" style="background:linear-gradient(90deg,#1c1400,#2d2000);border:1px solid #92400e;border-radius:8px;padding:9px 14px;cursor:pointer;transition:all .8s ease;display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px">☀️</span>
+        <span id="sunshineTxt" style="font-size:11px;font-weight:700;letter-spacing:2px;color:#fde68a;transition:color .8s ease">EARLY 15min SUN SHINE</span>
+      </div>
     </div>
-    <div class="habits-list" id="habitsList"></div>
+  </div>
+
+  <!-- COLLAPSED MINI BAR (shown when gauge is collapsed) -->
+  <div id="gaugeMiniPanel" style="display:none;margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:10px">
+      <span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#94a3b8;text-transform:uppercase;flex-shrink:0">Overall</span>
+      <div style="flex:1;height:6px;background:#7f1d1d;border-radius:3px;overflow:hidden">
+        <div id="miniBarFill" style="height:100%;border-radius:3px;background:#ef4444;transition:width .6s ease,background .6s ease;width:0%"></div>
+      </div>
+      <span id="miniBarPct" style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:#fff;flex-shrink:0">0%</span>
+    </div>
   </div>
 
   <!-- WEEKLY INTENTION -->
   <div id="weeklyIntentionDisplay" style="margin-bottom:10px;display:none">
     <div style="font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:#ffffff;line-height:1.3;padding:2px 0" id="intentionText"></div>
-  </div>
-
-  <!-- SUNSHINE ROW (toggled from settings) — always stays, just fades -->
-  <div id="sunshineBtn" style="display:none;margin-bottom:10px">
-    <div id="sunshineBar" onclick="toggleSunshine()" style="flex:1;background:linear-gradient(90deg,#1c1400,#2d2000);border:1px solid #92400e;border-radius:8px;padding:9px 14px;cursor:pointer;transition:all .8s ease;display:flex;align-items:center;gap:8px">
-      <span style="font-size:14px">☀️</span>
-      <span id="sunshineTxt" style="font-size:11px;font-weight:700;letter-spacing:2px;color:#fde68a;transition:color .8s ease">EARLY 15min SUN SHINE</span>
-    </div>
   </div>
 
   <!-- DYNAMIC SECTIONS -->
@@ -591,7 +606,30 @@ function drawFire(intensity){
 function startFire(i){ if(fireAnim) cancelAnimationFrame(fireAnim); const loop=()=>{drawFire(i);fireAnim=requestAnimationFrame(loop);}; loop(); }
 function stopFire(){ if(fireAnim){cancelAnimationFrame(fireAnim);fireAnim=null;} fCtx.clearRect(0,0,60,60); fireParticles=[]; }
 
-// ─── SUN SVG TOGGLE ──────────────────────────────────────────────────────────
+// ─── GAUGE COLLAPSE ───────────────────────────────────────────────────────────
+let gaugeCollapsed = false;
+
+function toggleGaugeCollapse() {
+  gaugeCollapsed = !gaugeCollapsed;
+  document.getElementById('gaugeFullPanel').style.display = gaugeCollapsed ? 'none' : 'block';
+  document.getElementById('gaugeMiniPanel').style.display = gaugeCollapsed ? 'block' : 'none';
+  document.getElementById('collapseBtn').textContent = gaugeCollapsed ? '▼' : '▲';
+  if(gaugeCollapsed) updateMiniBar();
+}
+
+function updateMiniBar() {
+  const pct = calcOverallPct();
+  const fill = document.getElementById('miniBarFill');
+  const label = document.getElementById('miniBarPct');
+  if(!fill || !label) return;
+  fill.style.width = pct + '%';
+  label.textContent = pct + '%';
+  let col;
+  if(pct >= 80) col = '#4ade80';
+  else if(pct >= 50) col = '#16a34a';
+  else col = '#ef4444';
+  fill.style.background = col;
+}
 let sunActive=false;
 
 function toggleSunshine() {
@@ -727,7 +765,17 @@ function calcHabitPct(habit) {
     case 'finance':{ const ft=s.financeTasks||[]; return ft.length?Math.round(((td.financeDone||[]).length/ft.length)*100):0; }
     case 'body':{ const gym=s.gymWeekly[DAY_KEYS[getDayOfWeek()]]||[]; return gym.length?Math.round(((td.gymDone||[]).length/gym.length)*100):0; }
     case 'hygiene':{ const mo=s.morning||[],ev=s.evening||[],tot=mo.length+ev.length,done=(td.morningDone||[]).length+(td.eveningDone||[]).length; return tot?Math.round((done/tot)*100):0; }
-    case 'health':{ return (td.macros||[]).length>0?100:0; }
+    case 'health':{
+      const limit=data.settings.calLimit||650;
+      const consumed=(td.macros||[]).reduce((s,m)=>s+m.kcal,0);
+      const remaining=limit-consumed;
+      if(consumed===0) return 0;
+      if(remaining>=0) return 100;
+      // Over limit: drop 20% per 100kcal over
+      const over=Math.abs(remaining);
+      const drop=Math.floor(over/100)*20;
+      return Math.max(0, 100-drop);
+    }
   }
   return 0;
 }
@@ -752,7 +800,7 @@ const habitMeta = {
   finance:{ label:'Finance', icon:'💰' },
   body:   { label:'Body',    icon:'💪' },
   hygiene:{ label:'Hygiene', icon:'🧼' },
-  health: { label:'Health',  icon:'🍽' }
+  health: { label:'Calories', icon:'🍽' }
 };
 
 function renderHabits() {
@@ -1325,18 +1373,29 @@ function renderHeatmap() {
     const pct=(data.days[key]||{}).pct||0;
     const c=document.createElement('div'); c.className='heatmap-cell';
     if(key===todayKey) c.classList.add('today');
-    if(pct>=80) c.classList.add('g80'); else if(pct>=70) c.classList.add('g70'); else if(pct>=60) c.classList.add('g60');
+    if(pct===100) c.classList.add('g100');
+    else if(pct>=80) c.classList.add('g80');
+    else if(pct>=60) c.classList.add('g60');
+    else if(pct>0)   c.classList.add('glow');
     c.title=`${d}/${month+1}: ${pct}%`; hm.appendChild(c);
   }
 }
 
 // ─── STREAK ──────────────────────────────────────────────────────────────────
 function calcStreak() {
-  let streak=0; const today=new Date();
+  let streak=0;
+  const today=new Date();
+  // Check today first — if today isn't green yet, streak is 0
+  const todayPct=(data.days[todayKey]||{}).pct||0;
+  if(todayPct<80){
+    document.getElementById('streakVal').innerHTML=`0 <span>days</span>`;
+    return;
+  }
   for(let i=0;i<365;i++){
     const d=new Date(today); d.setDate(today.getDate()-i);
-    const key=d.toISOString().slice(0,10), pct=(data.days[key]||{}).pct||0;
-    if(pct>=80) streak++; else if(i>0) break;
+    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const pct=(data.days[key]||{}).pct||0;
+    if(pct>=80) streak++; else break;
   }
   document.getElementById('streakVal').innerHTML=`${streak} <span>days</span>`;
 }
@@ -1405,7 +1464,20 @@ function scheduleNotifications() {
 }
 
 // ─── SETTINGS ─────────────────────────────────────────────────────────────────
-function openSettings(){ populateSettings(); document.getElementById('settingsModal').classList.add('open'); }
+function openSettings(){
+  populateSettings();
+  const modal=document.getElementById('settingsModal');
+  modal.classList.add('open');
+  // Auto-save on blur of any input/textarea
+  if(!modal._autoSaveAttached){
+    modal._autoSaveAttached=true;
+    modal.addEventListener('blur', (e)=>{
+      if(e.target.matches('input,textarea,select')) {
+        saveSettings(true); // silent=true: no close
+      }
+    }, true);
+  }
+}
 function closeSettings(){ document.getElementById('settingsModal').classList.remove('open'); }
 
 function populateSettings() {
@@ -1445,13 +1517,18 @@ function populateSettings() {
       <button onclick="moveHabit('${h}',-1)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px">↑</button>
       <button onclick="moveHabit('${h}',1)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px">↓</button>
     </div>`).join('');
-  // Section order
-  const sOrder=s.sectionOrder||['tasks1','gym1','macros','hygiene','calories'];
-  const allSections=[...new Set([...sOrder,...['tasks1','gym1','macros','hygiene','calories']])];
+  // Section order — include extras if enabled
+  const baseSections=['tasks1','gym1','macros','hygiene','calories'];
+  const extraSections=Object.keys(ext).filter(k=>ext[k]&&['tasks2','gym2'].includes(k));
+  const sOrder=s.sectionOrder||baseSections;
+  const allSections=[...new Set([...sOrder,...baseSections,...extraSections])];
   document.getElementById('sSectionOrder').innerHTML=allSections.map(id=>{
     const def=SECTION_DEFS.find(d=>d.id===id)||{label:id};
+    const isExtra=['tasks2','gym2'].includes(id);
+    const enabledLabel=isExtra&&ext[id]?'':isExtra?' <span style="font-size:10px;color:var(--muted)">(disabled)</span>':'';
+    if(isExtra&&!ext[id]) return ''; // hide disabled extras
     return `<div class="section-order-item" id="sord_${id}">
-      <span class="section-order-label">${def.label}</span>
+      <span class="section-order-label">${def.label}${enabledLabel}</span>
       <button class="section-order-btn" onclick="moveSect('${id}',-1)">↑</button>
       <button class="section-order-btn" onclick="moveSect('${id}',1)">↓</button>
     </div>`;
@@ -1468,9 +1545,11 @@ function toggleExtra(key) {
   const btn=document.getElementById('toggle'+key.charAt(0).toUpperCase()+key.slice(1));
   if(btn) s.extraEnabled[key]?btn.classList.add('on'):btn.classList.remove('on');
   document.getElementById('sSection_'+key).style.display=s.extraEnabled[key]?'':'none';
-  // Add to sectionOrder if enabled
-  if(s.extraEnabled[key] && !(s.sectionOrder||[]).includes(key)) s.sectionOrder.push(key);
-  if(!s.extraEnabled[key]) s.sectionOrder=(s.sectionOrder||[]).filter(x=>x!==key);
+  if(!s.sectionOrder) s.sectionOrder=['tasks1','gym1','macros','hygiene','calories'];
+  if(s.extraEnabled[key] && !s.sectionOrder.includes(key)) s.sectionOrder.push(key);
+  if(!s.extraEnabled[key]) s.sectionOrder=s.sectionOrder.filter(x=>x!==key);
+  // Refresh the section order UI
+  populateSettings();
 }
 
 function moveSect(id, dir) {
@@ -1510,7 +1589,7 @@ function moveHabit(habit, dir) {
 
 function toggleNotif(id){ document.getElementById(id).classList.toggle('on'); }
 
-function saveSettings() {
+function saveSettings(silent=false) {
   const s=data.settings;
   s.weeklyIntention=document.getElementById('sWeeklyIntention').value.trim();
   s.tasksLabel1=document.getElementById('sTasksLabel1').value.trim()||'Today Tasks';
@@ -1531,14 +1610,16 @@ function saveSettings() {
   s.calLimit=parseInt(document.getElementById('sCalLimit').value)||650;
   if(!s.notifs) s.notifs={};
   ['nFinance','nGym','nMorning','nEvening','nMacro'].forEach(id=>{ s.notifs[id]=document.getElementById(id+'Toggle')?.classList.contains('on'); });
-  saveData(data); closeSettings(); renderAll(); scheduleNotifications();
+  saveData(data);
+  if(!silent){ closeSettings(); renderAll(); scheduleNotifications(); }
+  else renderAll();
 }
 
 // ─── REFRESH ─────────────────────────────────────────────────────────────────
 function refreshAll() {
   const pct=calcOverallPct();
   getToday().pct=pct; saveData(data);
-  updateGauge(pct); renderHabits(); updateCardStates();
+  updateGauge(pct); renderHabits(); updateCardStates(); updateMiniBar(); calcStreak();
 }
 
 function toggleSunshineSetting() {
