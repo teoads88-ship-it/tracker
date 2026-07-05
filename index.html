@@ -269,7 +269,10 @@
 
   <!-- WEEKLY INTENTION -->
   <div id="weeklyIntentionDisplay" style="margin-bottom:10px;display:none">
-    <div style="font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:#ffffff;line-height:1.3;padding:2px 0" id="intentionText"></div>
+    <div style="background:#ffffff;border-radius:14px;padding:12px 16px;box-shadow:0 2px 12px rgba(0,0,0,0.3)">
+      <div style="font-size:9px;font-weight:700;letter-spacing:2px;color:#94a3b8;text-transform:uppercase;margin-bottom:4px" id="intentionTitle">${data.settings.weeklyIntentionTitle||'Седмично намерение'}</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;color:#0f172a;line-height:1.3" id="intentionText"></div>
+    </div>
   </div>
 
   <!-- DYNAMIC SECTIONS -->
@@ -380,6 +383,9 @@
     <!-- WEEKLY INTENTION -->
     <div class="settings-section">
       <div class="settings-section-title">🎯 Седмично намерение</div>
+      <div class="settings-row" style="margin-bottom:6px">
+        <input class="settings-input" id="sWeeklyIntentionTitle" placeholder="Заглавие (напр. Седмично намерение)" />
+      </div>
       <textarea class="settings-input" id="sWeeklyIntention" rows="2" placeholder="напр. Тази седмица се фокусирам върху дисциплината и почивката" style="resize:none;width:100%;line-height:1.5"></textarea>
       <div style="font-size:11px;color:var(--muted);margin-top:4px">Показва се над Sun бутона всяка седмица</div>
     </div>
@@ -548,6 +554,7 @@ function initDefaults() {
   if (!s.notifs)    s.notifs   = {};
   if (!s.habitOrder) s.habitOrder = ['finance','body','hygiene','health'];
   if (!s.weeklyIntention) s.weeklyIntention = '';
+  if (!s.weeklyIntentionTitle) s.weeklyIntentionTitle = 'Седмично намерение';
   if (!s.extraEnabled) s.extraEnabled = { tasks2:false, gym2:false, sunshine:false };
   if (!data.days) data.days = {};
   saveData(data);
@@ -1482,6 +1489,7 @@ function closeSettings(){ document.getElementById('settingsModal').classList.rem
 
 function populateSettings() {
   const s=data.settings;
+  document.getElementById('sWeeklyIntentionTitle').value=s.weeklyIntentionTitle||'Седмично намерение';
   document.getElementById('sWeeklyIntention').value=s.weeklyIntention||'';
   document.getElementById('sTasksLabel2').value=s.tasksLabel2||'Today Tasks 2';
   document.getElementById('sGymLabel1').value=s.gymLabel1||'Gym Today';
@@ -1591,6 +1599,7 @@ function toggleNotif(id){ document.getElementById(id).classList.toggle('on'); }
 
 function saveSettings(silent=false) {
   const s=data.settings;
+  s.weeklyIntentionTitle=document.getElementById('sWeeklyIntentionTitle').value.trim()||'Седмично намерение';
   s.weeklyIntention=document.getElementById('sWeeklyIntention').value.trim();
   s.tasksLabel1=document.getElementById('sTasksLabel1').value.trim()||'Today Tasks';
   s.tasksLabel2=document.getElementById('sTasksLabel2').value.trim()||'Today Tasks 2';
@@ -1618,7 +1627,9 @@ function saveSettings(silent=false) {
 // ─── REFRESH ─────────────────────────────────────────────────────────────────
 function refreshAll() {
   const pct=calcOverallPct();
-  getToday().pct=pct; saveData(data);
+  const td=getToday();
+  td.pct=pct;
+  saveData(data);
   updateGauge(pct); renderHabits(); updateCardStates(); updateMiniBar(); calcStreak();
 }
 
@@ -1635,10 +1646,13 @@ function toggleSunshineSetting() {
 
 function renderWeeklyIntention() {
   const intention=data.settings.weeklyIntention||'';
+  const title=data.settings.weeklyIntentionTitle||'Седмично намерение';
   const display=document.getElementById('weeklyIntentionDisplay');
   const text=document.getElementById('intentionText');
+  const titleEl=document.getElementById('intentionTitle');
   if(!display||!text) return;
   if(intention){
+    if(titleEl) titleEl.textContent=title;
     text.textContent=intention;
     display.style.display='block';
   } else {
