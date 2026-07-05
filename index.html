@@ -375,6 +375,13 @@
       <button class="settings-add-btn" onclick="addSettingItem('sMorning','morning')">+ добави</button>
     </div>
 
+    <!-- HYGIENE EXTRA -->
+    <div class="settings-section">
+      <div class="settings-section-title">🧼 Hygiene – Задачи</div>
+      <div id="sHygieneExtra"></div>
+      <button class="settings-add-btn" onclick="addSettingItem('sHygieneExtra','hygieneExtra')">+ добави</button>
+    </div>
+
     <!-- EVENING -->
     <div class="settings-section">
       <div class="settings-section-title">🌙 Evening – Заглавие</div>
@@ -526,6 +533,7 @@ const SECTION_DEFS = [
   { id:'calories', label:'📊 Калории седмицата',  canToggle:false },
   { id:'tasks2',   label:'📋 Today Tasks 2',       canToggle:true },
   { id:'gym2',     label:'💪 Gym Today 2',          canToggle:true },
+  { id:'hygiene_extra', label:'🧼 Hygiene',            canToggle:false },
 ];
 
 function getTodayKey() {
@@ -562,7 +570,8 @@ function initDefaults() {
   if (!s.gymWeekly2) s.gymWeekly2 = { mon:[], tue:[], wed:[], thu:[], fri:[], sat:[], sun:[] };
   if (!s.morning)   s.morning  = ['Измий зъби','Душ','Пий вода'];
   if (!s.evening)   s.evening  = ['Измий зъби','Скинкеър','Прочисти телефона'];
-  if (!s.calLimit)  s.calLimit = 650;
+  if (!s.hygieneExtra)  s.hygieneExtra  = [];
+  if (!s.hygieneExtraLabel) s.hygieneExtraLabel = 'Hygiene';
   if (!s.notifs)    s.notifs   = {};
   if (!s.habitOrder) s.habitOrder = ['finance','body','hygiene','health'];
   if (!s.weeklyIntention) s.weeklyIntention = '';
@@ -578,7 +587,7 @@ function getToday() {
   if (!data.days[todayKey]) {
     data.days[todayKey] = {
       financeDone:[], finance2Done:[], gymDone:[], gym2Done:[],
-      morningDone:[], eveningDone:[], macros:[], pct:0
+      morningDone:[], eveningDone:[], hygieneExtraDone:[], macros:[], pct:0
     };
   }
   return data.days[todayKey];
@@ -656,7 +665,7 @@ const INLINE_MAP = {
   finance2: { settingsKey:'financeTasks2', doneKey:'finance2Done', renderFn:()=>populateTaskSections() },
   gym1:     { settingsKey:'gymWeekly',     doneKey:'gymDone',      renderFn:()=>populateTaskSections(), isGym:true },
   gym2:     { settingsKey:'gymWeekly2',    doneKey:'gym2Done',     renderFn:()=>populateTaskSections(), isGym:true },
-  morning:  { settingsKey:'morning',       doneKey:'morningDone',  renderFn:()=>populateTaskSections() },
+  hygiene_extra: { settingsKey:'hygieneExtra', doneKey:'hygieneExtraDone', renderFn:()=>populateTaskSections() },
   evening:  { settingsKey:'evening',       doneKey:'eveningDone',  renderFn:()=>populateTaskSections() },
 };
 
@@ -665,16 +674,21 @@ function showInlineAdd(type) {
   if(!el) return;
   if(el.style.display!=='none'){ el.style.display='none'; el.innerHTML=''; return; }
   el.style.display='block';
-  el.innerHTML=`<div style="display:flex;gap:6px;margin-top:6px">
+  el.innerHTML=`<div style="display:flex;gap:6px;margin-top:6px;align-items:center">
     <input id="inlineInput_${type}" type="text" placeholder="Нова задача..." style="flex:1;background:var(--card2);border:1px solid var(--accent);border-radius:8px;padding:7px 10px;color:var(--text);font-size:13px;outline:none"/>
-    <button onclick="submitInlineAdd('${type}')" style="background:var(--green);border:none;border-radius:8px;padding:7px 12px;color:#000;font-weight:700;font-size:14px;cursor:pointer">✓</button>
-    <button onclick="document.getElementById('inlineAdd_${type}').style.display='none'" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--muted);font-size:14px;cursor:pointer">✕</button>
+    <button onclick="closeInlineAdd('${type}')" style="background:#ef4444;border:none;border-radius:8px;padding:7px 10px;color:#fff;font-weight:700;font-size:14px;cursor:pointer;flex-shrink:0">✕</button>
+    <button onclick="submitInlineAdd('${type}')" style="background:var(--green);border:none;border-radius:8px;padding:7px 12px;color:#000;font-weight:700;font-size:14px;cursor:pointer;flex-shrink:0">✓</button>
   </div>`;
   const input=document.getElementById('inlineInput_'+type);
   if(input){
     input.focus();
-    input.addEventListener('keydown',e=>{ if(e.key==='Enter') submitInlineAdd(type); if(e.key==='Escape'){ el.style.display='none'; el.innerHTML=''; } });
+    input.addEventListener('keydown',e=>{ if(e.key==='Enter') submitInlineAdd(type); if(e.key==='Escape') closeInlineAdd(type); });
   }
+}
+
+function closeInlineAdd(type) {
+  const el=document.getElementById('inlineAdd_'+type);
+  if(el){ el.style.display='none'; el.innerHTML=''; }
 }
 
 function submitInlineAdd(type) {
@@ -710,7 +724,8 @@ function miniGaugePct(type) {
     case 'finance2':{ const t=s.financeTasks2||[]; return t.length?Math.round(((td.finance2Done||[]).length/t.length)*100):0; }
     case 'gym1':{ const dk=DAY_KEYS[getDayOfWeek()],g=s.gymWeekly[dk]||[]; return g.length?Math.round(((td.gymDone||[]).length/g.length)*100):0; }
     case 'gym2':{ const dk=DAY_KEYS[getDayOfWeek()],g=s.gymWeekly2[dk]||[]; return g.length?Math.round(((td.gym2Done||[]).length/g.length)*100):0; }
-    case 'hygiene':{ const mo=s.morning||[],ev=s.evening||[],tot=mo.length+ev.length,done=(td.morningDone||[]).length+(td.eveningDone||[]).length; return tot?Math.round((done/tot)*100):0; }
+    case 'hygiene':{ const mo=s.morning||[],ev=s.evening||[],he=s.hygieneExtra||[],tot=mo.length+ev.length+he.length,done=(td.morningDone||[]).length+(td.eveningDone||[]).length+(td.hygieneExtraDone||[]).length; return tot?Math.round((done/tot)*100):0; }
+    case 'hygiene_extra':{ const he=s.hygieneExtra||[]; return he.length?Math.round(((td.hygieneExtraDone||[]).length/he.length)*100):0; }
     default: return 0;
   }
 }
@@ -778,9 +793,10 @@ function showInlineAddTomorrow(type, containerId) {
   const el=document.getElementById(containerId); if(!el) return;
   if(el.style.display!=='none'){ el.style.display='none'; el.innerHTML=''; return; }
   el.style.display='block';
-  el.innerHTML=`<div style="display:flex;gap:6px;margin:4px 0">
+  el.innerHTML=`<div style="display:flex;gap:6px;margin:4px 0;align-items:center">
     <input id="tmInput_${type}" type="text" placeholder="Задача за утре..." style="flex:1;background:var(--card2);border:1px solid var(--accent);border-radius:8px;padding:6px 10px;color:var(--text);font-size:13px;outline:none"/>
-    <button onclick="addTomorrowTask('${type}','${containerId}')" style="background:var(--green);border:none;border-radius:8px;padding:6px 10px;color:#000;font-weight:700;font-size:14px;cursor:pointer">✓</button>
+    <button onclick="document.getElementById('${containerId}').style.display='none';document.getElementById('${containerId}').innerHTML=''" style="background:#ef4444;border:none;border-radius:8px;padding:6px 10px;color:#fff;font-weight:700;font-size:14px;cursor:pointer;flex-shrink:0">✕</button>
+    <button onclick="addTomorrowTask('${type}','${containerId}')" style="background:var(--green);border:none;border-radius:8px;padding:6px 10px;color:#000;font-weight:700;font-size:14px;cursor:pointer;flex-shrink:0">✓</button>
   </div>`;
   const inp=document.getElementById('tmInput_'+type);
   if(inp){ inp.focus(); inp.addEventListener('keydown',e=>{if(e.key==='Enter')addTomorrowTask(type,containerId);}); }
@@ -806,8 +822,8 @@ function removeTomorrowTask(type, idx) {
 }
 
 function updateAllMiniGauges() {
-  const map={tasks1Body:'tasks1Mini',tasks2Body:'tasks2Mini',gym1Body:'gym1Mini',gym2Body:'gym2Mini',hygieneBody:'hygieneMini'};
-  const types={tasks1Body:'finance',tasks2Body:'finance2',gym1Body:'gym1',gym2Body:'gym2',hygieneBody:'hygiene'};
+  const map={tasks1Body:'tasks1Mini',tasks2Body:'tasks2Mini',gym1Body:'gym1Mini',gym2Body:'gym2Mini',hygieneBody:'hygieneMini',hygieneExtraBody:'hygieneExtraMini'};
+  const types={tasks1Body:'finance',tasks2Body:'finance2',gym1Body:'gym1',gym2Body:'gym2',hygieneBody:'hygiene',hygieneExtraBody:'hygiene_extra'};
   Object.entries(map).forEach(([bodyId,miniId])=>{
     const body=document.getElementById(bodyId);
     if(body&&body.style.display==='none') renderMiniGauge(miniId,types[bodyId]);
@@ -927,7 +943,7 @@ function updateCardStates() {
   if((data.settings.extraEnabled||{}).gym2)
     updateCardState('gym2Card', data.settings.gymWeekly2[dk]||[], getToday().gym2Done||[]);
   // morning
-  updateCardState('morningCard', data.settings.morning||[], getToday().morningDone||[]);
+  updateCardState('hygieneExtraCard', data.settings.hygieneExtra||[], getToday().hygieneExtraDone||[]);
   // evening
   updateCardState('eveningCard', data.settings.evening||[], getToday().eveningDone||[]);
 }
@@ -970,7 +986,7 @@ function calcHabitPct(habit) {
   switch(habit){
     case 'finance':{ const ft=s.financeTasks||[]; return ft.length?Math.round(((td.financeDone||[]).length/ft.length)*100):0; }
     case 'body':{ const gym=s.gymWeekly[DAY_KEYS[getDayOfWeek()]]||[]; return gym.length?Math.round(((td.gymDone||[]).length/gym.length)*100):0; }
-    case 'hygiene':{ const mo=s.morning||[],ev=s.evening||[],tot=mo.length+ev.length,done=(td.morningDone||[]).length+(td.eveningDone||[]).length; return tot?Math.round((done/tot)*100):0; }
+    case 'hygiene':{ const mo=s.morning||[],ev=s.evening||[],he=s.hygieneExtra||[],tot=mo.length+ev.length+he.length,done=(td.morningDone||[]).length+(td.eveningDone||[]).length+(td.hygieneExtraDone||[]).length; return tot?Math.round((done/tot)*100):0; }
     case 'health':{
       const limit=data.settings.calLimit||650;
       const consumed=(td.macros||[]).reduce((s,m)=>s+m.kcal,0);
@@ -993,7 +1009,7 @@ function calcOverallPct() {
   if(s.extraEnabled?.tasks2){ const ft2=s.financeTasks2||[]; total+=ft2.length; done+=(td.finance2Done||[]).length; }
   const gym=s.gymWeekly[DAY_KEYS[getDayOfWeek()]]||[]; total+=gym.length; done+=(td.gymDone||[]).length;
   if(s.extraEnabled?.gym2){ const gym2=s.gymWeekly2[DAY_KEYS[getDayOfWeek()]]||[]; total+=gym2.length; done+=(td.gym2Done||[]).length; }
-  const mo=s.morning||[],ev=s.evening||[]; total+=mo.length+ev.length; done+=(td.morningDone||[]).length+(td.eveningDone||[]).length;
+  const mo=s.morning||[],ev=s.evening||[],he=s.hygieneExtra||[]; total+=mo.length+ev.length+he.length; done+=(td.morningDone||[]).length+(td.eveningDone||[]).length+(td.hygieneExtraDone||[]).length;
   total+=1; if((td.macros||[]).length>0) done+=1;
   // Sun = 15% fixed bonus if enabled and pressed
   const sunEnabled=(s.extraEnabled||{}).sunshine;
@@ -1106,6 +1122,17 @@ function buildSectionHTML(id) {
           </div>
         </div>
       </div>`;
+    case 'hygiene_extra': return `
+      <div class="card" id="hygieneExtraCard">
+        <div class="card-title" style="cursor:pointer" onclick="toggleCardCollapse('hygieneExtraBody','hygieneExtraMini',this,'hygiene_extra')">
+          🧼 Hygiene
+          <button onclick="showInlineAdd('hygiene_extra');event.stopPropagation()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 0 0 6px;line-height:1;margin-left:auto;flex-shrink:0;font-weight:300" class="card-add-btn">+</button>
+        <span id="hygieneExtraMini" class="card-mini-gauge-inline" style="display:none;flex:1;align-items:center;gap:6px;margin-left:8px"><span class="card-mini-gauge-bar" style="flex:1;height:5px;background:#7f1d1d;border-radius:3px;overflow:hidden"><span class="cmg-fill" style="display:block;height:100%;border-radius:3px;width:0%"></span></span><span class="cmg-pct" style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;color:#fff;white-space:nowrap">0%</span></span></div>
+        <div id="hygieneExtraBody">
+          <div id="hygieneExtraTasks"></div>
+          <div id="inlineAdd_hygiene_extra" style="display:none"></div>
+        </div>
+      </div>`;
     case 'calories': return `
       <div class="card">
         <div class="card-title">📊 Калории тази седмица</div>
@@ -1123,7 +1150,7 @@ function buildSectionHTML(id) {
 }
 
 function renderSections() {
-  const order=data.settings.sectionOrder||['tasks1','gym1','tasks2','gym2','macros','hygiene','calories'];
+  const order=data.settings.sectionOrder||['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','calories'];
   const extra=data.settings.extraEnabled||{};
   const allIds=[...order];
   if(extra.tasks2 && !allIds.includes('tasks2')) allIds.push('tasks2');
@@ -1184,12 +1211,17 @@ function populateTaskSections() {
   renderMacros();
   renderWeekStrip();
   loadWeekWeight();
+  // hygiene_extra
+  const het=document.getElementById('hygieneExtraTasks');
+  if(het) het.innerHTML=(s.hygieneExtra||[]).map((t,i)=>`
+    <div class="me-item ${(td.hygieneExtraDone||[]).includes(i)?'done':''}" onclick="toggleTask('hygiene_extra',${i},this)">
+      <div class="me-check"></div><div class="me-name">${t}</div></div>`).join('');
 }
 
 // ─── TOGGLE TASK ─────────────────────────────────────────────────────────────
 function toggleTask(type, idx, el) {
   const td=getToday();
-  const keyMap={finance:'financeDone',finance2:'finance2Done',gym:'gymDone',gym2:'gym2Done',morning:'morningDone',evening:'eveningDone'};
+  const keyMap={finance:'financeDone',finance2:'finance2Done',gym:'gymDone',gym2:'gym2Done',morning:'morningDone',evening:'eveningDone',hygiene_extra:'hygieneExtraDone'};
   const key=keyMap[type];
   if(!td[key]) td[key]=[];
   const wasIn=td[key].includes(idx);
@@ -1747,6 +1779,7 @@ function populateSettings() {
     const wkObj=sfx?s.gymWeekly2:s.gymWeekly;
     c.innerHTML=DAY_KEYS.map((dk,i)=>`<div class="gym-day-section"><div class="gym-day-title">${DAYS[i]}</div><textarea class="settings-input" id="sGym${sfx}_${dk}" rows="3" style="resize:vertical;width:100%">${(wkObj[dk]||[]).join('\n')}</textarea></div>`).join('');
   });
+  renderSettingItems('sHygieneExtra', s.hygieneExtra||[], 'hygieneExtra');
   renderSettingItems('sMorning', s.morning||[], 'morning');
   renderSettingItems('sEvening', s.evening||[], 'evening');
   document.getElementById('sCalLimit').value=s.calLimit||650;
@@ -1768,11 +1801,11 @@ function populateSettings() {
       <button onclick="moveHabit('${h}',1)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px">↓</button>
     </div>`).join('');
   // Section order — include extras if enabled
-  const baseSections=['tasks1','gym1','tasks2','gym2','macros','hygiene','calories'];
+  const baseSections=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','calories'];
   const extraSections=Object.keys(ext).filter(k=>ext[k]&&['tasks2','gym2'].includes(k));
   const activeSections=new Set([...baseSections,...extraSections]);
   // Rebuild clean sectionOrder
-  if(!s.sectionOrder) s.sectionOrder=['tasks1','gym1','tasks2','gym2','macros','hygiene','calories'];
+  if(!s.sectionOrder) s.sectionOrder=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','calories'];
   extraSections.forEach(k=>{ if(!s.sectionOrder.includes(k)) s.sectionOrder.push(k); });
   s.sectionOrder=s.sectionOrder.filter(x=>activeSections.has(x));
   // Add any missing base sections
@@ -1798,7 +1831,7 @@ function toggleExtra(key) {
   const btn=document.getElementById('toggle'+key.charAt(0).toUpperCase()+key.slice(1));
   if(btn) s.extraEnabled[key]?btn.classList.add('on'):btn.classList.remove('on');
   document.getElementById('sSection_'+key).style.display=s.extraEnabled[key]?'':'none';
-  if(!s.sectionOrder) s.sectionOrder=['tasks1','gym1','tasks2','gym2','macros','hygiene','calories'];
+  if(!s.sectionOrder) s.sectionOrder=['tasks1','gym1','tasks2','gym2','macros','hygiene','hygiene_extra','calories'];
   if(s.extraEnabled[key] && !s.sectionOrder.includes(key)) s.sectionOrder.push(key);
   if(!s.extraEnabled[key]) s.sectionOrder=s.sectionOrder.filter(x=>x!==key);
   // Refresh the section order UI
@@ -1871,6 +1904,7 @@ function saveSettings(silent=false) {
     const wkObj=sfx?s.gymWeekly2:s.gymWeekly;
     DAY_KEYS.forEach(dk=>{ const ta=document.getElementById('sGym'+sfx+'_'+dk); if(ta) wkObj[dk]=ta.value.split('\n').map(l=>l.trim()).filter(Boolean); });
   });
+  s.hygieneExtra=Array.from(document.querySelectorAll('#sHygieneExtra input')).map(i=>i.value.trim()).filter(Boolean);
   s.morning=Array.from(document.querySelectorAll('#sMorning input')).map(i=>i.value.trim()).filter(Boolean);
   s.evening=Array.from(document.querySelectorAll('#sEvening input')).map(i=>i.value.trim()).filter(Boolean);
   s.calLimit=parseInt(document.getElementById('sCalLimit').value)||650;
